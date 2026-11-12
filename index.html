@@ -339,7 +339,8 @@ function layout() {
   const top = Math.max(H * 0.17, titleBottom + 10), bottom = gridH * 0.94;
   const a = projUnitY(STAR_Y + 0.3, 0), b = projUnitY(GROUND_Y, -1.25);   // 0.3 = 星芒的高度
   const span = b - a;
-  SCALE = Math.min((bottom - top) / span, 0.86 * W / (2 * R0 * 1.08));
+  // 視窗剛開時高度可能還是 0（內嵌頁面、App 內瀏覽器），比例不能變負數，否則整頁當掉變黑
+  SCALE = Math.max(5, Math.min((bottom - top) / span, 0.86 * W / (2 * R0 * 1.08)));
   const extra = (bottom - top) - span * SCALE;
   CYp = top - a * SCALE + extra * 0.72;
   CXp = W / 2;
@@ -511,7 +512,7 @@ function buildSong() {
 const SONG = buildSong();
 
 let AC = null, master = null, comp = null, revIn = null, recDest = null, runBus = null, noiseBuf = null;
-let muted = false, audioLive = false, audioPending = false, hiddenAt = 0;
+let muted = false, audioLive = false, audioPending = false, pausedT = -1, schedTimer = 0;
 const MASTER_VOL = 0.85;
 let runStart = 0, runStartPerf = 0, loopStart = 0, evIdx = 0;
 const noteRing = new Float32Array(16).fill(-1e9); let noteHead = 0;
@@ -553,7 +554,7 @@ function initAudio() {
   // iOS 解鎖：在點擊事件裡播一段無聲
   const b = AC.createBuffer(1, 1, 22050), s = AC.createBufferSource();
   s.buffer = b; s.connect(AC.destination); s.start(0);
-  setInterval(schedule, 40);
+  if (!schedTimer) schedTimer = setInterval(schedule, 40);
 }
 
 function voiceTone(when, midi, vel, parts, out) {
@@ -682,20 +683,56 @@ function startMusic(start) {
 // 第一次點擊或按鍵：建立音訊，並從動畫「目前播到的地方」接上音樂
 function enableAudio() {
   if (audioLive || audioPending) return;
+  if (AC && AC.state === 'closed') AC = null;            // iPhone 在背景太久可能把音訊整個關掉，重建一個
   if (!AC) initAudio();
   if (!AC) { tapEl.classList.add('hide'); return; }      // 瀏覽器沒有 Web Audio
   audioPending = true;
   const go = () => {
     audioPending = false;
     if (audioLive || AC.state !== 'running') return;     // 沒成功就等下一次點擊
-    const tNow = Math.max(0, clockNow());
-    audioLive = true;
-    startMusic(audioNow() - tNow);                       // 畫面時間不跳動，直接接到音訊時鐘
-    tapEl.classList.add('hide');
+    attachAudio();
   };
   const p = AC.resume();
   if (p && typeof p.then === 'function') p.then(go, () => { audioPending = false; });
   else go();
+}
+
+// 從畫面目前播到的時間點接上音樂（畫面時間不跳動，直接改用音訊時鐘）
+function attachAudio() {
+  const tNow = Math.max(0, clockNow());
+  audioLive = true;
+  startMusic(audioNow() - tNow);
+  tapEl.classList.add('hide');
+}
+
+// 音訊停住時（切到背景、iPhone 中斷音訊），畫面改用一般時鐘，才不會跟著音樂一起卡住
+function detachAudio() {
+  if (!audioLive) return;
+  const tNow = Math.max(0, clockNow());
+  audioLive = false;
+  runStartPerf = performance.now() / 1000 - tNow;
+  if (runBus) {
+    const old = runBus;
+    try { old.gain.setTargetAtTime(0, AC.currentTime, 0.02); } catch (e) { /* 音訊已停 */ }
+    setTimeout(() => old.disconnect(), 400);
+    runBus = null;
+  }
+}
+
+// 回到畫面時試著恢復音樂；iPhone 常常不准，這時顯示提示，等她點一下再接上
+function tryResumeAudio() {
+  if (!AC || audioLive || mode !== 'run') return;
+  const showHint = () => { if (!audioLive && mode === 'run') tapEl.classList.remove('hide'); };
+  if (AC.state === 'closed') { showHint(); return; }
+  const ok = () => {
+    if (!audioLive && mode === 'run' && !document.hidden && AC.state === 'running') attachAudio();
+    else showHint();
+  };
+  try {
+    const p = AC.resume();
+    if (p && typeof p.then === 'function') p.then(ok, showHint); else ok();
+  } catch (e) { showHint(); }
+  setTimeout(showHint, 1200);       // resume 有時完全沒有回應
 }
 
 function lightLevel(j, s, ph, t) {
@@ -998,6 +1035,8 @@ function frame(now) {
   const rdt = (now - lastFrame) / 1000; lastFrame = now;
   if (rdt > 0) fps = lerp(fps, 1 / rdt, 0.05);
   if (mode === 'idle') { render(0, true, now / 1000); return; }
+  // 畫面還開著但音訊被系統中斷（來電、其他 App 播音樂）：先讓畫面繼續跑，再試著接回音樂
+  if (audioLive && AC.state !== 'running' && !document.hidden) { detachAudio(); tryResumeAudio(); }
   let t = clockNow();
   if (t < tPrev) t = tPrev;
   const dt = tPrev < 0 ? 0 : clamp(t - tPrev, 0, 0.05);
@@ -1069,13 +1108,14 @@ window.addEventListener('keydown', e => {
 });
 // 切到背景時暫停時鐘，回來後從原地繼續，畫面與音樂仍然同步
 document.addEventListener('visibilitychange', () => {
+  if (mode !== 'run' || rec) return;
   if (document.hidden) {
-    hiddenAt = performance.now();
-    if (audioLive && !rec) AC.suspend();
+    pausedT = Math.max(0, tPrev);           // 記住離開時播到哪裡
+    detachAudio();
+    if (AC && AC.state === 'running') { const s = AC.suspend(); if (s && s.catch) s.catch(() => {}); }
   } else {
-    if (!audioLive && hiddenAt) runStartPerf += (performance.now() - hiddenAt) / 1000;
-    hiddenAt = 0;
-    if (audioLive && mode === 'run') AC.resume();
+    if (pausedT >= 0) { runStartPerf = performance.now() / 1000 - pausedT; tPrev = pausedT; pausedT = -1; }
+    tryResumeAudio();
   }
 });
 let resizeTimer = 0;
@@ -1083,7 +1123,8 @@ window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer
 
 if (DEBUG) window.__xmas = {
   get t() { return mode === 'run' ? clockNow() : 0; }, get points() { return N; }, get grid() { return [COLS, ROWS]; },
-  get flakes() { return nActive; }, get audio() { return AC ? AC.state : 'none'; }, newRun,
+  get flakes() { return nActive; }, get audio() { return AC ? AC.state : 'none'; }, get ac() { return AC; },
+  get live() { return audioLive; }, newRun,
 };
 
 // 載入後直接開始動畫
