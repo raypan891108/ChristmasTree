@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Merry Christmas · ASCII Tree</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎄</text></svg>">
+<style>
+  :root {
+    --bg: #05070f; --ink: #e8eefc; --dim: #8b97bb; --gold: #ffd98a; --red: #ff7b8c;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    --cjk: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #probe {
+    position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+
+  /* 音樂提示：瀏覽器不准自動播放聲音，第一次點擊後才會有音樂 */
+  #tap {
+    position: fixed; z-index: 2; left: 50%; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+    padding: 9px 16px; border-radius: 999px; font: 500 13px/1 var(--cjk); color: var(--gold);
+    background: rgba(10, 14, 30, .62); border: 1px solid rgba(255, 217, 138, .28);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    transition: opacity .6s; animation: pulse 2.4s ease-in-out infinite;
+  }
+  #tap.hide { opacity: 0; animation: none; }
+  @keyframes pulse { 50% { opacity: .55; } }
+
+  /* 右上角控制鈕 */
+  #ctl {
+    position: fixed; z-index: 2; display: flex; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .6s;
+    top: calc(env(safe-area-inset-top, 0px) + 10px); right: calc(env(safe-area-inset-right, 0px) + 10px);
+  }
+  #ctl.show { opacity: 1; pointer-events: auto; }
+  #ctl button {
+    width: 38px; height: 38px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+    color: var(--ink); background: rgba(10, 14, 30, .55); border: 1px solid rgba(200, 215, 255, .18);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #ctl button:hover { border-color: rgba(255, 217, 138, .55); }
+  #ctl button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  #mute .x { display: none; }
+  #mute[aria-pressed="true"] { color: var(--dim); }
+  #mute[aria-pressed="true"] .w { display: none; }
+  #mute[aria-pressed="true"] .x { display: inline; }
+  #rec.on { color: #ff5c70; border-color: rgba(255, 92, 112, .7); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { #tap { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="ASCII 3D 聖誕樹動畫"></canvas>
+<div id="probe"></div>
+
+<div id="tap" role="status">♪ 點一下畫面播放音樂</div>
+
+<div id="ctl">
+  <button id="mute" type="button" aria-pressed="false" title="聲音開關 (M)" aria-label="聲音開關">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M11 5 6 9H3v6h3l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="M16 9l5 6M21 9l-5 6"/>
+    </svg>
+  </button>
+  <button id="again" type="button" title="重新播放 (R)" aria-label="重新播放">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
+    </svg>
+  </button>
+  <button id="rec" type="button" title="從頭錄成影片，再按一次停止並下載" aria-label="錄影">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>
+  </button>
+</div>
+
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0">請開啟 JavaScript 才能觀看。</p></noscript>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+ * 基本工具
+ * ===================================================================== */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, k) => a + (b - a) * k;
+const smooth = k => k * k * (3 - 2 * k);
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20261225);           // 固定種子：每次長出同一棵樹
+const cc = s => s.charCodeAt(0);
+const codes = s => Array.from(s, cc);
+
+const rootCss = getComputedStyle(document.documentElement);
+const MONO = rootCss.getPropertyValue('--mono').trim() || 'monospace';
+const CJK = rootCss.getPropertyValue('--cjk').trim() || 'sans-serif';
+const params = new URLSearchParams(location.search);
+const SEEK = Math.max(0, parseFloat(params.get('t')) || 0);   // ?t=20 直接跳到第 20 秒
+const DEBUG = params.has('debug');                            // ?debug 顯示 FPS
+
+/* =====================================================================
+ * 節奏與時間軸（以小節為單位，讓畫面跟音樂對齊）
+ * ===================================================================== */
+const BPM = 144, BEAT = 60 / BPM, BAR = BEAT * 4;   // 一小節約 1.67 秒
+const TL = {
+  typeStart: 0.35, typeStep: 0.11,   // "Merry Christmas" 打字
+  subIn: 2.1,                        // 「聖誕快樂」淡入
+  titleMove: 2 * BAR - 0.15,         // 標題縮小移到上方
+  groundStart: 2 * BAR - 0.5,
+  trunkStart: 2 * BAR, trunkEnd: 2 * BAR + 1.3,
+  growStart: 2 * BAR + 0.7, growEnd: 8 * BAR,          // 樹葉由下往上長（約 4～13 秒）
+  garlandStart: 8 * BAR, garlandEnd: 9.75 * BAR,       // 金色彩帶
+  lightsStart: 8.5 * BAR, lightsEnd: 12 * BAR,         // 彩燈沿螺旋點亮
+  ornStart: 11 * BAR, ornEnd: 12.75 * BAR,             // 彩球
+  star: 13 * BAR,                                      // 頂端星星（約 21.7 秒）
+  snow: 13 * BAR,                                      // 開始下雪、燈跟著節拍閃
+};
+
+/* =====================================================================
+ * 場景參數
+ * ===================================================================== */
+const TREE_H = 2.15, R0 = 0.98, TIERS = 7;
+const GROUND_Y = -0.46, STAR_Y = TREE_H + 0.1;
+const CAM_D = 6.2, CAM_Y = 1.1, PITCH = 0.17;
+const COS_P = Math.cos(PITCH), SIN_P = Math.sin(PITCH);
+const ROT_SPEED = 0.34, ROT0 = 0.5;
+const TARGET_COLS = 64;              // 樹的寬度大約佔幾個字元
+const N_LEAF = 12500, N_UNDER = 1200, N_TRUNK = 700, N_GROUND = 1600;
+const N_GARL = 1700, N_LIGHTS = 110, N_ORN = 30;
+
+const K_LEAF = 0, K_UNDER = 1, K_TRUNK = 2, K_GROUND = 3, K_GARL = 4, K_LIGHT = 5, K_ORN = 6;
+
+/* =====================================================================
+ * 建模：3D 點雲（每個點 = 位置、法向量、類型、出生時間 t0、變化值）
+ * ===================================================================== */
+const B = { k: [], x: [], y: [], z: [], nx: [], ny: [], nz: [], t0: [], v: [], s: [], ph: [] };
+function add(k, x, y, z, nx, ny, nz, t0, v, s) {
+  const L = Math.hypot(nx, ny, nz) || 1;
+  B.k.push(k); B.x.push(x); B.y.push(y); B.z.push(z);
+  B.nx.push(nx / L); B.ny.push(ny / L); B.nz.push(nz / L);
+  B.t0.push(t0); B.v.push(v); B.s.push(s); B.ph.push(rnd() * TAU);
+}
+// 樹的半徑：整體是圓錐，再疊上鋸齒狀的「一層一層」樹枝
+function Rof(u) {
+  u = clamp(u, 0, 1);
+  const tf = u * TIERS, f = tf - Math.floor(tf);
+  return R0 * (1 - u) * (0.6 + 0.4 * (1 - f)) + 0.012;
+}
+function dRdy(u) {
+  u = clamp(u, 0, 0.9999);
+  const tf = u * TIERS, f = tf - Math.floor(tf);
+  return R0 * (-(0.6 + 0.4 * (1 - f)) - (1 - u) * 0.4 * TIERS) / TREE_H;
+}
+const growT = u => TL.growStart + u * (TL.growEnd - TL.growStart - 0.9) + rnd() * 0.9;
+
+// 地面（一圈淡淡的點）
+for (let n = 0; n < N_GROUND; n++) {
+  const r = 0.16 + 1.55 * Math.pow(rnd(), 0.7), th = rnd() * TAU;
+  add(K_GROUND, r * Math.cos(th), GROUND_Y + (rnd() - 0.5) * 0.01, r * Math.sin(th), 0, 1, 0,
+      TL.groundStart + r * 0.4 + rnd() * 0.3, rnd(), r);
+}
+// 樹幹
+const TRUNK_TOP = 0.14;
+for (let n = 0; n < N_TRUNK; n++) {
+  const y = GROUND_Y + rnd() * (TRUNK_TOP - GROUND_Y), th = rnd() * TAU;
+  const r = 0.12 * (1 + (rnd() - 0.5) * 0.1), g = (y - GROUND_Y) / (TRUNK_TOP - GROUND_Y);
+  add(K_TRUNK, r * Math.cos(th), y, r * Math.sin(th), Math.cos(th), 0, Math.sin(th),
+      TL.trunkStart + g * (TL.trunkEnd - TL.trunkStart - 0.25) + rnd() * 0.25, rnd(), g);
+}
+// 樹葉（依表面積撒點，越下面越多）
+for (let n = 0; n < N_LEAF;) {
+  const u = rnd();
+  if (rnd() > Rof(u) / R0 + 0.04) continue;
+  const th = rnd() * TAU, c = Math.cos(th), s = Math.sin(th);
+  const r = Rof(u) * (1 - 0.16 * rnd() * rnd()) * (1 + (rnd() - 0.5) * 0.05);
+  add(K_LEAF, r * c, u * TREE_H + (rnd() - 0.5) * 0.02, r * s, c, -dRdy(u), s, growT(u), rnd(), u);
+  n++;
+}
+// 每一層樹枝的底面（補洞用，顏色較暗）
+for (let n = 0; n < N_UNDER;) {
+  const j = Math.floor(rnd() * TIERS), u = j / TIERS, env = 1 - u;
+  if (rnd() > env + 0.1) continue;
+  const rOut = R0 * env + 0.012, rIn = j === 0 ? 0.12 : R0 * env * 0.6;
+  const r = rIn + (rOut - rIn) * Math.sqrt(rnd()), th = rnd() * TAU, c = Math.cos(th), s = Math.sin(th);
+  add(K_UNDER, r * c, u * TREE_H - 0.012, r * s, c * 0.25, -1, s * 0.25, growT(u), rnd(), u);
+  n++;
+}
+// 金色彩帶：沿螺旋往上，帶一點垂墜的弧度
+for (let n = 0; n < N_GARL; n++) {
+  const s = n / N_GARL, th = s * 4.3 * TAU + 0.8;
+  const y = (0.035 + s * 0.86) * TREE_H - 0.06 * Math.abs(Math.sin(th * 2.5));
+  const r = Rof(y / TREE_H) * 1.02 + 0.015, c = Math.cos(th), sn = Math.sin(th), j = 0.014;
+  add(K_GARL, r * c + (rnd() - 0.5) * j, y + (rnd() - 0.5) * j, r * sn + (rnd() - 0.5) * j, c, 0.5, sn,
+      TL.garlandStart + s * (TL.garlandEnd - TL.garlandStart) + rnd() * 0.08, rnd(), s);
+}
+// 彩燈：另一條螺旋，依序點亮（v = 顏色編號，s = 在螺旋上的位置）
+for (let j = 0; j < N_LIGHTS; j++) {
+  const s = (j + 0.5) / N_LIGHTS, th = s * 6.6 * TAU + 2.2;
+  const u = 0.03 + s * 0.88 + (rnd() - 0.5) * 0.012;
+  const r = Rof(u) * 1.05 + 0.02, c = Math.cos(th), sn = Math.sin(th);
+  add(K_LIGHT, r * c, u * TREE_H, r * sn, c, 0.3, sn, TL.lightsStart + s * (TL.lightsEnd - TL.lightsStart), j % 5, s);
+}
+// 彩球：小球體，掛在每層樹枝的外緣
+{
+  const orn = [];
+  for (let tries = 0; orn.length < N_ORN && tries < 5000; tries++) {
+    const tier = Math.floor(rnd() * (TIERS - 1));
+    const u = (tier + 0.04 + 0.32 * rnd()) / TIERS;
+    if (rnd() > (1 - u) + 0.15) continue;
+    const th = rnd() * TAU, rad = 0.05 + 0.03 * rnd() * (1 - u);
+    const R = Rof(u) + rad * 0.55;
+    const o = { x: R * Math.cos(th), y: u * TREE_H - rad * 0.4, z: R * Math.sin(th), r: rad, u };
+    if (orn.some(q => Math.hypot(q.x - o.x, q.y - o.y, q.z - o.z) < (q.r + o.r) * 2.2)) continue;
+    orn.push(o);
+  }
+  orn.sort((a, b) => a.u - b.u);
+  let prev = -1;
+  orn.forEach((o, idx) => {
+    let col = Math.floor(rnd() * 4); if (col === prev) col = (col + 1) % 4; prev = col;
+    const t0 = TL.ornStart + (idx / orn.length) * (TL.ornEnd - TL.ornStart);
+    const np = Math.round(40 + o.r * 900);
+    for (let n = 0; n < np; n++) {
+      const zz = rnd() * 2 - 1, a = rnd() * TAU, q = Math.sqrt(1 - zz * zz);
+      const dx = q * Math.cos(a), dy = zz, dz = q * Math.sin(a);
+      add(K_ORN, o.x + dx * o.r, o.y + dy * o.r, o.z + dz * o.r, dx, dy, dz, t0, col, idx / orn.length);
+    }
+  });
+}
+// 頂端星星不做成點雲，直接用字元畫成星芒（見 render 第 7 段），在小字級下比較清楚
+
+const N = B.k.length;
+const KND = Uint8Array.from(B.k);
+const PX = Float32Array.from(B.x), PY = Float32Array.from(B.y), PZ = Float32Array.from(B.z);
+const NX = Float32Array.from(B.nx), NY = Float32Array.from(B.ny), NZ = Float32Array.from(B.nz);
+const T0 = Float32Array.from(B.t0), VV = Float32Array.from(B.v), SS = Float32Array.from(B.s), PH = Float32Array.from(B.ph);
+
+/* =====================================================================
+ * 調色盤（同一顏色的字元一起畫，減少切換顏色的次數）
+ * ===================================================================== */
+const PAL = [];
+const pal = arr => { const i = PAL.length; PAL.push(...arr); return i; };
+const P_LEAF = pal(['#12402a', '#175030', '#1c6136', '#22743e', '#2a8b48', '#36a555', '#52c26e', '#8ae39c']);
+const P_FRESH = pal(['#e2ffe8']);
+const P_TRUNK = pal(['#4a2c17', '#7a4d28', '#b07a45']);
+const P_GROUND = pal(['#151d31', '#26324f', '#5b6f99', '#c3d1ee']);
+const P_GARL = pal(['#7d5f19', '#cfa53a', '#ffe7a3']);
+const P_LIGHT = pal(['#9e2438', '#ff5c70', '#a3781c', '#ffd35c', '#28589f', '#76b9ff', '#97308f', '#ff86ea', '#a39478', '#fff5da']);
+const P_ORN = pal(['#5a0f18', '#a51d2e', '#ec3d52', '#6a4b10', '#bb8b22', '#f4c94e',
+                   '#132e68', '#2653b4', '#5592f4', '#3a2f52', '#6c5a98', '#bba9ec']);
+const P_ORN_HI = pal(['#ffffff']);
+const P_STAR = pal(['#cf8f16', '#ffd54e', '#fff7cf']);
+const P_SNOW = pal(['#56668c', '#a9badc', '#ffffff']);
+const P_SKY = pal(['#2a3352', '#56648e', '#cfd9ff']);
+const P_SPARK = pal(['#ffd98a', '#ffffff']);
+const NPAL = PAL.length;
+const LIGHT_RGB = [[255, 72, 96], [255, 196, 72], [86, 168, 255], [255, 104, 226], [255, 240, 206]];
+
+const CH = {
+  dot: cc('.'), comma: cc(','), dash: cc('-'), plus: cc('+'), star: cc('*'), hash: cc('#'), at: cc('@'),
+  o: cc('o'), O: cc('O'), zero: cc('0'), lp: cc('('), rp: cc(')'), eq: cc('='), pct: cc('%'),
+};
+const R_LEAF = codes('.:-=+*#%@'), R_TRUNK = codes('.:|I#'), R_GARL = codes('.:-~=');
+const RAY_CH = codes('-/|\\');
+
+// 光暈貼圖（只畫一次，之後用 drawImage 疊加）
+function glowSprite(r, g, b, size = 64) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d'), h = size / 2;
+  const gr = x.createRadialGradient(h, h, 0, h, h, h);
+  gr.addColorStop(0, `rgba(${r},${g},${b},1)`);
+  gr.addColorStop(0.18, `rgba(${r},${g},${b},0.55)`);
+  gr.addColorStop(0.5, `rgba(${r},${g},${b},0.14)`);
+  gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  x.fillStyle = gr; x.fillRect(0, 0, size, size);
+  return c;
+}
+const GLOW = LIGHT_RGB.map(([r, g, b]) => glowSprite(r, g, b));
+const GLOW_STAR = glowSprite(255, 214, 120, 128);
+
+/* =====================================================================
+ * 畫布與版面
+ * ===================================================================== */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d', { alpha: false });
+const probe = document.getElementById('probe');
+
+let W = 0, H = 0, DPR = 1, SAT = 0, SAB = 0, SAL = 0, SAR = 0, gridH = 0, hudFs = 10;
+let SCALE = 1, FOCAL = 1, CXp = 0, CYp = 0, starSX = 0, starSY = 0, treeMidY = 0;
+let fs = 10, cellW = 6, cellH = 10, COLS = 1, ROWS = 1, NC = 1, OX = 0, OY = 0, CELL_FONT = '', HUD_FONT = '';
+let zbuf, cellPt, cellCh, cellPal, order, runBuf;
+let skyC = new Int32Array(0), skyPh = new Float32Array(0), skySp = new Float32Array(0);
+let FMAX = 200;
+let BG_GRAD, BG_COOL, BG_WARM;
+const T = { bigSize: 40, smallSize: 28, bigY: 300, smallY: 40 };
+const pcount = new Int32Array(NPAL), pstart = new Int32Array(NPAL), pfill = new Int32Array(NPAL);
+
+// 鏡頭在樹的正前方、略高，往下看 PITCH 角度
+function projUnitY(y, z) {
+  const yy = y - CAM_Y, y2 = yy * COS_P + z * SIN_P, d = z * COS_P - yy * SIN_P + CAM_D;
+  return -y2 * CAM_D / d;
+}
+
+function layout() {
+  W = window.innerWidth; H = window.innerHeight; DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const ps = getComputedStyle(probe);
+  SAT = parseFloat(ps.paddingTop) || 0; SAR = parseFloat(ps.paddingRight) || 0;
+  SAB = parseFloat(ps.paddingBottom) || 0; SAL = parseFloat(ps.paddingLeft) || 0;
+
+  hudFs = W < 480 ? 10 : 11;
+  HUD_FONT = `${hudFs}px ${MONO}`;
+  gridH = H - SAB - (DEBUG ? hudFs + 12 : 2);    // 數值列只在 ?debug 時保留空間
+
+  // 標題：開場在中間，之後縮小移到上方
+  T.bigSize = Math.min(W * 0.082, H * 0.075, 62);
+  T.smallSize = Math.min(W * 0.058, H * 0.045, 34);
+  T.bigY = H * 0.4;
+  // 窄螢幕時右上角按鈕會擋到標題，所以標題往下移到按鈕下方
+  T.smallY = SAT + (W < 600 ? 60 : 14) + T.smallSize * 0.62;
+  const titleBottom = T.smallY + T.smallSize * 1.6 + 8;
+
+  // 讓整棵樹（含星星與前方地面）剛好塞進標題下方到地面之間
+  const top = Math.max(H * 0.17, titleBottom + 10), bottom = gridH * 0.94;
+  const a = projUnitY(STAR_Y + 0.3, 0), b = projUnitY(GROUND_Y, -1.25);   // 0.3 = 星芒的高度
+  const span = b - a;
+  SCALE = Math.min((bottom - top) / span, 0.86 * W / (2 * R0 * 1.08));
+  const extra = (bottom - top) - span * SCALE;
+  CYp = top - a * SCALE + extra * 0.72;
+  CXp = W / 2;
+  FOCAL = CAM_D * SCALE;
+  starSX = CXp; starSY = CYp + projUnitY(STAR_Y, 0) * SCALE;
+  treeMidY = CYp + projUnitY(TREE_H * 0.45, 0) * SCALE;
+
+  // 字元網格：依樹的寬度決定字級
+  fs = clamp(Math.round((2 * R0 * SCALE) / TARGET_COLS / 0.6 * 2) / 2, 7, 15);
+  CELL_FONT = `${fs}px ${MONO}`;
+  ctx.font = CELL_FONT;
+  cellW = ctx.measureText('M'.repeat(50)).width / 50;   // 等寬字型的實際字寬
+  cellH = Math.round(fs * 1.06 * 100) / 100;
+  COLS = Math.max(1, Math.floor(W / cellW));
+  ROWS = Math.max(1, Math.floor(gridH / cellH));
+  NC = COLS * ROWS;
+  OX = (W - COLS * cellW) / 2;
+  OY = gridH - ROWS * cellH;
+
+  zbuf = new Float32Array(NC); cellPt = new Int32Array(NC);
+  cellCh = new Uint16Array(NC); cellPal = new Uint8Array(NC);
+  order = new Int32Array(NC); runBuf = new Uint16Array(COLS + 32);
+
+  FMAX = Math.min(MAXF, Math.round(NC / 24));
+  if (nActive > FMAX) nActive = FMAX;
+
+  // 背景星空
+  const ns = Math.round(NC * 0.011);
+  skyC = new Int32Array(ns); skyPh = new Float32Array(ns); skySp = new Float32Array(ns);
+  for (let i = 0; i < ns; i++) {
+    const col = Math.floor(Math.random() * COLS), row = Math.floor(Math.pow(Math.random(), 1.3) * ROWS * 0.75);
+    skyC[i] = row * COLS + col; skyPh[i] = Math.random() * TAU; skySp[i] = 0.6 + Math.random() * 1.8;
+  }
+
+  BG_GRAD = ctx.createLinearGradient(0, 0, 0, H);
+  BG_GRAD.addColorStop(0, '#081029'); BG_GRAD.addColorStop(0.45, '#070c1f'); BG_GRAD.addColorStop(1, '#04060e');
+  BG_COOL = ctx.createRadialGradient(CXp, treeMidY, 0, CXp, treeMidY, Math.max(W, H) * 0.6);
+  BG_COOL.addColorStop(0, 'rgba(40,70,150,0.2)'); BG_COOL.addColorStop(1, 'rgba(40,70,150,0)');
+  BG_WARM = ctx.createRadialGradient(CXp, treeMidY, 0, CXp, treeMidY, SCALE * 1.9);
+  BG_WARM.addColorStop(0, 'rgba(255,170,80,0.16)'); BG_WARM.addColorStop(1, 'rgba(255,170,80,0)');
+}
+
+/* =====================================================================
+ * 雪花、積雪、點擊火花
+ * ===================================================================== */
+const MAXF = 800;
+const fx = new Float32Array(MAXF), fy = new Float32Array(MAXF), fv = new Float32Array(MAXF);
+const fp = new Float32Array(MAXF), fd = new Uint8Array(MAXF);
+let nActive = 0;
+
+function updateSnow(t, dt) {
+  const target = Math.floor(FMAX * clamp((t - TL.snow) / 6, 0, 1));
+  while (nActive < target) {
+    const i = nActive++;
+    fd[i] = rnd() < 0.45 ? 1 : 0;                         // 1 = 前景（大、快），0 = 背景（會被樹擋住）
+    fx[i] = rnd() * W; fy[i] = -rnd() * gridH * 0.35 - cellH;
+    fv[i] = (fd[i] ? 6 + rnd() * 3.5 : 3.6 + rnd() * 2) * cellH;     // 每秒落下幾列
+    fp[i] = rnd() * TAU;
+  }
+  if (nActive > target) nActive = target;
+  const wind = Math.sin(t * 0.13) * 0.8 * cellW;
+  for (let i = 0; i < nActive; i++) {
+    fy[i] += fv[i] * dt;
+    fx[i] += (Math.sin(t * 1.1 + fp[i]) * 1.4 * cellW + wind) * dt * (fd[i] ? 1.2 : 0.8);
+    if (fx[i] < 0) fx[i] += W; else if (fx[i] >= W) fx[i] -= W;
+    if (fy[i] - OY >= ROWS * cellH) {                    // 落到畫面底部就消失（不積雪），從上方重新落下
+      fy[i] = -rnd() * cellH * 6 - cellH; fx[i] = rnd() * W;
+    }
+  }
+}
+
+const MAXS = 240;
+const sx = new Float32Array(MAXS), sy = new Float32Array(MAXS), svx = new Float32Array(MAXS);
+const svy = new Float32Array(MAXS), sl = new Float32Array(MAXS), sL = new Float32Array(MAXS);
+let sN = 0;
+function burst(x, y, n, spd) {
+  for (let k = 0; k < n && sN < MAXS; k++) {
+    const a = rnd() * TAU, v = (0.35 + rnd() * 0.65) * spd;
+    sx[sN] = x; sy[sN] = y; svx[sN] = Math.cos(a) * v; svy[sN] = Math.sin(a) * v - spd * 0.3;
+    sl[sN] = sL[sN] = 0.7 + rnd() * 0.8; sN++;
+  }
+}
+function updateSparks(dt) {
+  for (let i = 0; i < sN; i++) {
+    sl[i] -= dt;
+    if (sl[i] <= 0) {
+      sN--; sx[i] = sx[sN]; sy[i] = sy[sN]; svx[i] = svx[sN]; svy[i] = svy[sN]; sl[i] = sl[sN]; sL[i] = sL[sN]; i--;
+      continue;
+    }
+    svy[i] += 22 * cellH * dt;
+    const drag = Math.exp(-dt * 1.5); svx[i] *= drag;
+    sx[i] += svx[i] * dt; sy[i] += svy[i] * dt;
+  }
+}
+
+/* =====================================================================
+ * 音樂：Jingle Bells（James Lord Pierpont, 1857，公有領域）
+ * 用 Web Audio 現場合成音樂盒、低音、和弦與雪橇鈴
+ * ===================================================================== */
+const CHORUS = [
+  [76, 1], [76, 1], [76, 2],
+  [76, 1], [76, 1], [76, 2],
+  [76, 1], [79, 1], [72, 1.5], [74, 0.5],
+  [76, 4],
+  [77, 1], [77, 1], [77, 1.5], [77, 0.5],
+  [77, 1], [76, 1], [76, 1], [76, 0.5], [76, 0.5],
+  [76, 1], [74, 1], [74, 1], [76, 1],
+  [74, 2], [79, 2],
+  [76, 1], [76, 1], [76, 2],
+  [76, 1], [76, 1], [76, 2],
+  [76, 1], [79, 1], [72, 1.5], [74, 0.5],
+  [76, 4],
+  [77, 1], [77, 1], [77, 1.5], [77, 0.5],
+  [77, 1], [76, 1], [76, 1], [76, 0.5], [76, 0.5],
+  [79, 1], [79, 1], [77, 1], [74, 1],
+  [72, 4],
+];
+const CHORUS_CH = ['C', 'C', 'C', 'C', 'F', 'C', 'D7', 'G7', 'C', 'C', 'C', 'C', 'F', 'C', 'G7', 'C'];
+const VERSE = [
+  [67, 1], [76, 1], [74, 1], [72, 1],
+  [67, 3], [67, 0.5], [67, 0.5],
+  [67, 1], [76, 1], [74, 1], [72, 1],
+  [69, 4],
+  [69, 1], [77, 1], [76, 1], [74, 1],
+  [71, 4],
+  [79, 1], [79, 1], [77, 1], [74, 1],
+  [76, 4],
+  [67, 1], [76, 1], [74, 1], [72, 1],
+  [67, 4],
+  [67, 1], [76, 1], [74, 1], [72, 1],
+  [69, 3], [69, 1],
+  [69, 1], [77, 1], [76, 1], [74, 1],
+  [79, 1], [79, 1], [79, 1], [79, 1],
+  [81, 1], [79, 1], [77, 1], [74, 1],
+  [72, 2], [0, 2],
+];
+const VERSE_CH = ['C', 'C', 'C', 'F', 'F', 'G7', 'G7', 'C', 'C', 'C', 'C', 'F', 'F', 'G7', 'G7', 'C'];
+const CHORD = {
+  C: { r: 48, f: 43, t: [60, 64, 67] },
+  F: { r: 41, f: 48, t: [60, 65, 69] },
+  G7: { r: 43, f: 50, t: [59, 62, 65] },
+  D7: { r: 50, f: 45, t: [60, 62, 66] },
+};
+const ARP = [[84, 88, 91, 96, 91, 88, 84, 88], [83, 86, 89, 91, 89, 86, 83, 79]];
+
+function buildSong() {
+  const E = [], chords = [];
+  const push = (b, type, m, d, v) => E.push({ b, type, m, d, v });
+  const melody = (notes, bar, shift, type, vel) => {
+    let b = bar * 4;
+    for (const [m, d] of notes) { if (m) push(b, type, m + shift, d, vel); b += d; }
+  };
+  ARP.forEach((row, i) => row.forEach((m, k) => push(i * 4 + k * 0.5, 'arp', m, 0.5, k === 0 ? 0.1 : 0.065)));
+  chords.push('C', 'G7');
+  let bar = 2;
+  melody(CHORUS, bar, 0, 'mel', 0.22); chords.push(...CHORUS_CH); bar += 16;          // 副歌
+  melody(VERSE, bar, 0, 'mel', 0.2); chords.push(...VERSE_CH); bar += 16;            // 主歌
+  melody(CHORUS, bar, 12, 'glock', 0.15); melody(CHORUS, bar, 0, 'mel', 0.09);       // 副歌（高八度鐘琴）
+  chords.push(...CHORUS_CH); bar += 16;
+  chords.forEach((name, i) => {
+    const c = CHORD[name], b = i * 4;
+    push(b, 'bass', c.r, 0.9, 0.3); push(b + 1, 'stab', c.t, 0.3, 0.045);
+    push(b + 2, 'bass', c.f, 0.9, 0.24); push(b + 3, 'stab', c.t, 0.3, 0.045);
+    for (let k = 0; k < 8; k++) push(b + k * 0.5, 'bell', 0, 0, k % 2 ? 0.03 : (k % 4 === 0 ? 0.075 : 0.055));
+  });
+  E.sort((a, b) => a.b - b.b);
+  return { E, beats: bar * 4 };
+}
+const SONG = buildSong();
+
+let AC = null, master = null, comp = null, revIn = null, recDest = null, runBus = null, noiseBuf = null;
+let muted = false, audioLive = false, audioPending = false, hiddenAt = 0;
+const MASTER_VOL = 0.85;
+let runStart = 0, runStartPerf = 0, loopStart = 0, evIdx = 0;
+const noteRing = new Float32Array(16).fill(-1e9); let noteHead = 0;
+
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const BOX_P = [[1, 1, 1.6], [2, 0.42, 0.9], [3, 0.16, 0.55], [4.2, 0.07, 0.3]];     // 音樂盒
+const GLOCK_P = [[1, 1, 1.4], [2.76, 0.35, 0.6], [5.4, 0.12, 0.25], [8.93, 0.05, 0.12]]; // 鐘琴
+
+function makeImpulse(sec, decay) {
+  const rate = AC.sampleRate, len = Math.floor(rate * sec), buf = AC.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
+function initAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 舊版 Safari 沒有 */ }
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return;
+  try { AC = new Ctor({ latencyHint: 'interactive' }); }
+  catch (e) { try { AC = new Ctor(); } catch (e2) { AC = null; return; } }
+
+  comp = AC.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.2;
+  master = AC.createGain(); master.gain.value = muted ? 0 : MASTER_VOL;
+  master.connect(comp); comp.connect(AC.destination);
+  const conv = AC.createConvolver(); conv.buffer = makeImpulse(2.6, 3.0);
+  revIn = AC.createGain(); revIn.gain.value = 0.32; revIn.connect(conv); conv.connect(master);
+
+  noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+  const nd = noiseBuf.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  if (AC.createMediaStreamDestination) {
+    try { recDest = AC.createMediaStreamDestination(); comp.connect(recDest); } catch (e) { recDest = null; }
+  }
+  // iOS 解鎖：在點擊事件裡播一段無聲
+  const b = AC.createBuffer(1, 1, 22050), s = AC.createBufferSource();
+  s.buffer = b; s.connect(AC.destination); s.start(0);
+  setInterval(schedule, 40);
+}
+
+function voiceTone(when, midi, vel, parts, out) {
+  const f = mtof(midi);
+  for (const [r, a, d] of parts) {
+    const fr = f * r; if (fr > 15000) continue;
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'sine'; o.frequency.value = fr;
+    g.gain.setValueAtTime(0.00001, when);
+    g.gain.exponentialRampToValueAtTime(vel * a, when + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.00001, when + d);
+    o.connect(g); g.connect(out); o.start(when); o.stop(when + d + 0.05);
+  }
+}
+function voiceBass(when, midi, dur, vel, out) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'triangle'; o.frequency.value = mtof(midi);
+  g.gain.setValueAtTime(0.00001, when);
+  g.gain.exponentialRampToValueAtTime(vel, when + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.00001, when + dur);
+  o.connect(g); g.connect(out); o.start(when); o.stop(when + dur + 0.05);
+}
+function voiceStab(when, notes, dur, vel, out) {
+  for (const m of notes) {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'triangle'; o.frequency.value = mtof(m);
+    g.gain.setValueAtTime(0.00001, when);
+    g.gain.exponentialRampToValueAtTime(vel, when + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.00001, when + dur);
+    o.connect(g); g.connect(out); o.start(when); o.stop(when + dur + 0.05);
+  }
+}
+function voiceBell(when, vel, out) {
+  const src = AC.createBufferSource(), bp = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = noiseBuf;
+  bp.type = 'bandpass'; bp.frequency.value = 6500 + Math.random() * 2500; bp.Q.value = 1.4;
+  g.gain.setValueAtTime(0.00001, when);
+  g.gain.exponentialRampToValueAtTime(vel, when + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.00001, when + 0.11);
+  src.connect(bp); bp.connect(g); g.connect(out);
+  src.start(when, Math.random() * 0.7, 0.13);
+  for (const fr of [5200 + Math.random() * 300, 7400 + Math.random() * 400]) {   // 金屬感的小「叮」
+    const o = AC.createOscillator(), og = AC.createGain();
+    o.frequency.value = fr;
+    og.gain.setValueAtTime(0.00001, when);
+    og.gain.exponentialRampToValueAtTime(vel * 0.14, when + 0.002);
+    og.gain.exponentialRampToValueAtTime(0.00001, when + 0.07);
+    o.connect(og); og.connect(out); o.start(when); o.stop(when + 0.1);
+  }
+}
+function playEv(ev, when) {
+  const out = runBus;
+  switch (ev.type) {
+    case 'mel':
+      voiceTone(when, ev.m, ev.v, BOX_P, out);
+      if (ev.v > 0.15) { noteRing[noteHead] = when - runStart; noteHead = (noteHead + 1) & 15; }
+      break;
+    case 'glock':
+      voiceTone(when, ev.m, ev.v, GLOCK_P, out);
+      noteRing[noteHead] = when - runStart; noteHead = (noteHead + 1) & 15;
+      break;
+    case 'arp': voiceTone(when, ev.m, ev.v, GLOCK_P, out); break;
+    case 'bass': voiceBass(when, ev.m, ev.d * BEAT, ev.v, out); break;
+    case 'stab': voiceStab(when, ev.m, ev.d * BEAT, ev.v, out); break;
+    case 'bell': voiceBell(when, ev.v, out); break;
+  }
+}
+// 預排程：每 40ms 把接下來 0.3 秒內的音符排進 Web Audio 時間軸
+function schedule() {
+  if (!audioLive || mode !== 'run' || !runBus) return;
+  const now = AC.currentTime, horizon = now + 0.3;
+  for (let guard = 0; guard < 600; guard++) {
+    if (evIdx >= SONG.E.length) { evIdx = 0; loopStart += SONG.beats * BEAT; }
+    const ev = SONG.E[evIdx], when = loopStart + ev.b * BEAT;
+    if (when > horizon) break;
+    evIdx++;
+    if (when < now - 0.03) continue;
+    playEv(ev, Math.max(when, now));
+  }
+}
+// 畫面時鐘：用「現在喇叭正在播的時間點」，畫面就會跟聲音對齊
+function audioNow() {
+  if (AC.state === 'running' && AC.getOutputTimestamp) {
+    const ts = AC.getOutputTimestamp();
+    if (ts && ts.contextTime > 0 && ts.performanceTime > 0) {
+      const ex = (performance.now() - ts.performanceTime) / 1000;
+      if (ex >= 0 && ex < 0.25) return ts.contextTime + ex;
+    }
+  }
+  return AC.currentTime - (AC.baseLatency || 0);
+}
+// 音樂還沒開始前用一般時鐘；音樂接上後改用音訊時鐘
+function clockNow() {
+  return audioLive ? audioNow() - runStart : performance.now() / 1000 - runStartPerf;
+}
+
+/* =====================================================================
+ * 執行狀態
+ * ===================================================================== */
+let mode = 'idle';
+let tPrev = -1, noteFlash = 0, boost = 0, beatPulse = 0, starBurst = false;
+
+function newRun(seek) {
+  nActive = 0; sN = 0; starBurst = false; boost = 0; noteFlash = 0;
+  tPrev = -1;
+  if (audioLive) startMusic(AC.currentTime + 0.12 - seek);
+  else runStartPerf = performance.now() / 1000 - seek;
+  mode = 'run';
+}
+
+// 從 start（AudioContext 時間）這一刻當作歌曲開頭，開始排程
+function startMusic(start) {
+  if (AC.state !== 'running') AC.resume();
+  if (runBus) {
+    const old = runBus;
+    old.gain.setTargetAtTime(0, AC.currentTime, 0.03);
+    setTimeout(() => old.disconnect(), 500);
+  }
+  runBus = AC.createGain();
+  runBus.connect(master); runBus.connect(revIn);
+  runStart = start; loopStart = start; evIdx = 0;
+  noteRing.fill(-1e9);
+  schedule();
+}
+
+// 第一次點擊或按鍵：建立音訊，並從動畫「目前播到的地方」接上音樂
+function enableAudio() {
+  if (audioLive || audioPending) return;
+  if (!AC) initAudio();
+  if (!AC) { tapEl.classList.add('hide'); return; }      // 瀏覽器沒有 Web Audio
+  audioPending = true;
+  const go = () => {
+    audioPending = false;
+    if (audioLive || AC.state !== 'running') return;     // 沒成功就等下一次點擊
+    const tNow = Math.max(0, clockNow());
+    audioLive = true;
+    startMusic(audioNow() - tNow);                       // 畫面時間不跳動，直接接到音訊時鐘
+    tapEl.classList.add('hide');
+  };
+  const p = AC.resume();
+  if (p && typeof p.then === 'function') p.then(go, () => { audioPending = false; });
+  else go();
+}
+
+function lightLevel(j, s, ph, t) {
+  let I;
+  if (t < TL.snow) I = 0.66 + 0.24 * Math.sin(t * 2.4 + ph);   // 還沒下雪：慢慢閃爍
+  else {                                                         // 下雪後：跟著拍子，每 4 小節換一種花樣
+    const bp = t / BEAT, fb = bp - Math.floor(bp), pulse = Math.exp(-fb * 4.5);
+    const pat = Math.floor(bp / 16) % 3;
+    if (pat === 0) I = 0.45 + 0.7 * pulse;
+    else if (pat === 1) I = ((Math.floor(bp) & 1) === (j & 1)) ? 0.5 + 0.65 * pulse : 0.3;
+    else { const w = (((s * 4 - bp * 0.5) % 1) + 1) % 1; I = 0.32 + 0.9 * Math.exp(-w * 5); }
+  }
+  return I + noteFlash * 0.22 + boost * 0.8;
+}
+
+function update(t, dt) {
+  boost *= Math.exp(-dt * 2.5);
+  let nf = 0;
+  for (let r = 0; r < 16; r++) {
+    const w = noteRing[r];
+    if (w <= t) { const e = Math.exp(-(t - w) * 7); if (e > nf) nf = e; }
+  }
+  noteFlash = nf;
+  beatPulse = t >= TL.snow ? Math.exp(-((t / BEAT) % 1) * 4.5) : 0;
+  if (!starBurst && t >= TL.star) { starBurst = true; burst(starSX, starSY, 46, cellW * 22); }
+  updateSnow(t, dt);
+  updateSparks(dt);
+}
+
+/* =====================================================================
+ * 繪製
+ * ===================================================================== */
+const LX = -0.72, LY = 0.5, LZ = -0.48;     // 光從左上前方打過來
+const LN = Math.hypot(LX, LY, LZ), Lx = LX / LN, Ly = LY / LN, Lz = LZ / LN;
+const HN = Math.hypot(Lx, Ly, Lz - 1), Hx = Lx / HN, Hy = Ly / HN, Hz = (Lz - 1) / HN;
+const glowC = new Int32Array(256), glowK = new Uint8Array(256), glowI = new Float32Array(256);
+
+function drawCells() {
+  pcount.fill(0);
+  let total = 0;
+  for (let c = 0; c < NC; c++) { const p = cellPal[c]; if (p !== 255) { pcount[p]++; total++; } }
+  let acc = 0;
+  for (let p = 0; p < NPAL; p++) { pstart[p] = acc; pfill[p] = acc; acc += pcount[p]; }
+  for (let c = 0; c < NC; c++) { const p = cellPal[c]; if (p !== 255) order[pfill[p]++] = c; }
+  ctx.font = CELL_FONT; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+  for (let p = 0; p < NPAL; p++) {
+    const n = pcount[p]; if (!n) continue;
+    ctx.fillStyle = PAL[p];
+    let j = pstart[p]; const end = j + n;
+    while (j < end) {
+      // 同一列、同一顏色、距離不遠的字元串成一個字串，一次 fillText
+      const c0 = order[j++], row = (c0 / COLS) | 0, col0 = c0 - row * COLS;
+      let len = 0, last = col0;
+      runBuf[len++] = cellCh[c0];
+      while (j < end) {
+        const c1 = order[j], r1 = (c1 / COLS) | 0;
+        if (r1 !== row) break;
+        const col1 = c1 - r1 * COLS, gap = col1 - last - 1;
+        if (gap > 16) break;
+        for (let g = 0; g < gap; g++) runBuf[len++] = 32;
+        runBuf[len++] = cellCh[c1]; last = col1; j++;
+      }
+      ctx.fillText(String.fromCharCode.apply(null, runBuf.subarray(0, len)), OX + col0 * cellW, OY + row * cellH);
+    }
+  }
+  return total;
+}
+
+function render(t, idle, tt) {
+  cellPal.fill(255);
+  let nGlow = 0, lit = 0;
+  const ang = ROT0 + t * ROT_SPEED, ca = Math.cos(ang), sa = Math.sin(ang);
+  const live = !idle && t > 0;
+
+  if (live) {
+    // ---- 1. 投影 + 深度緩衝：每格只留最靠近鏡頭的點 ----
+    zbuf.fill(1e9); cellPt.fill(-1);
+    for (let i = 0; i < N; i++) {
+      if (t < T0[i]) continue;                         // 還沒「長出來」
+      if (KND[i] === K_LIGHT) lit++;
+      const rx = PX[i] * ca - PZ[i] * sa, rz = PX[i] * sa + PZ[i] * ca;   // 繞 Y 軸旋轉
+      const yy = PY[i] - CAM_Y, y2 = yy * COS_P + rz * SIN_P, d = rz * COS_P - yy * SIN_P + CAM_D;
+      const kk = FOCAL / d;
+      const col = Math.floor((CXp + rx * kk - OX) / cellW), row = Math.floor((CYp - y2 * kk - OY) / cellH);
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+      const c = row * COLS + col;
+      if (d < zbuf[c]) { zbuf[c] = d; cellPt[c] = i; }
+    }
+
+    // ---- 2. 著色：依法向量算亮度，挑字元與顏色 ----
+    for (let c = 0; c < NC; c++) {
+      const i = cellPt[c]; if (i < 0) continue;
+      const k = KND[i], age = t - T0[i];
+      let ch, p;
+      {
+        const nx = NX[i], ny = NY[i], nz = NZ[i];
+        const nxr = nx * ca - nz * sa, nzr = nx * sa + nz * ca;
+        const ny2 = ny * COS_P + nzr * SIN_P, nz2 = nzr * COS_P - ny * SIN_P;
+        const diff = Math.max(0, nxr * Lx + ny2 * Ly + nz2 * Lz);
+        const fog = 1 - 0.5 * clamp((zbuf[c] - CAM_D + 0.5) / 1.6, 0, 1);
+        const grow = age < 0.45 ? age / 0.45 : 1;
+        if (k === K_LEAF) {
+          const tf = SS[i] * TIERS, ao = 0.42 + 0.58 * (1 - (tf - Math.floor(tf)));   // 每層上緣被上一層遮住，較暗
+          const b = clamp((0.2 + 0.82 * Math.pow(diff, 1.3)) * ao * fog * grow + (VV[i] - 0.5) * 0.12 + beatPulse * 0.05, 0, 0.999);
+          if (age < 0.3) { ch = CH.plus; p = P_FRESH; }                         // 正在長出來的那一圈
+          else { ch = R_LEAF[(b * R_LEAF.length) | 0]; p = P_LEAF + ((b * 8) | 0); }
+        } else if (k === K_UNDER) {
+          const b = clamp((0.05 + 0.3 * diff) * fog * grow, 0, 0.999);
+          ch = R_LEAF[(b * R_LEAF.length) | 0]; p = P_LEAF + Math.min(2, (b * 8) | 0);
+        } else if (k === K_TRUNK) {
+          const b = clamp((0.22 + 0.7 * diff) * fog * grow, 0, 0.999);
+          ch = R_TRUNK[(b * R_TRUNK.length) | 0]; p = P_TRUNK + Math.min(2, (b * 3) | 0);
+        } else if (k === K_GROUND) {
+          const v = VV[i];
+          const b = clamp((0.22 + 0.3 * v) * fog * grow, 0, 0.999);
+          ch = v < 0.6 ? CH.dot : v < 0.88 ? CH.comma : CH.dash;
+          p = P_GROUND + Math.min(3, (b * 4) | 0);
+        } else if (k === K_GARL) {
+          const spec = Math.pow(Math.max(0, nxr * Hx + ny2 * Hy + nz2 * Hz), 10);
+          const b = clamp((0.28 + 0.5 * diff + 0.7 * spec) * fog * grow + 0.14 * Math.sin(t * 5.5 + PH[i]), 0, 0.999);
+          ch = R_GARL[(b * R_GARL.length) | 0]; p = P_GARL + Math.min(2, (b * 3) | 0);
+        } else if (k === K_LIGHT) {
+          const j = (SS[i] * N_LIGHTS) | 0, ci = VV[i] | 0;
+          let I = age < 0.3 ? 1.6 - age * 2 : lightLevel(j, SS[i], PH[i], t);   // 剛點亮時閃一下
+          I *= 0.6 + 0.4 * fog;
+          const on = I > 0.6;
+          ch = I > 1.0 ? CH.at : on ? CH.O : CH.o;
+          p = P_LIGHT + ci * 2 + (on ? 1 : 0);
+          if (nGlow < 256) { glowC[nGlow] = c; glowK[nGlow] = ci; glowI[nGlow] = I; nGlow++; }
+        } else { // K_ORN
+          const ci = VV[i] | 0;
+          const spec = Math.pow(Math.max(0, nxr * Hx + ny2 * Hy + nz2 * Hz), 28);
+          const b = clamp((0.14 + 0.8 * diff) * fog, 0, 0.999);
+          if (age < 0.22 || spec > 0.6) { ch = CH.at; p = P_ORN_HI; }
+          else {
+            p = P_ORN + ci * 3 + Math.min(2, (b * 3) | 0);
+            ch = nz2 > -0.3 ? (nxr < 0 ? CH.lp : CH.rp) : (b > 0.62 ? CH.zero : b > 0.32 ? CH.O : CH.o);
+          }
+        }
+      }
+      cellCh[c] = ch; cellPal[c] = p;
+    }
+
+    // ---- 3. 背景雪花（只填空格，會被樹擋住）----
+    for (let f = 0; f < nActive; f++) {
+      if (fd[f]) continue;
+      const col = Math.floor((fx[f] - OX) / cellW), row = Math.floor((fy[f] - OY) / cellH);
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+      const c = row * COLS + col;
+      if (cellPal[c] !== 255) continue;
+      cellCh[c] = fp[f] < 2 ? CH.plus : CH.dot; cellPal[c] = P_SNOW + (fp[f] < 3 ? 1 : 0);
+    }
+  }
+
+  // ---- 4. 星空（只填空格）----
+  const fadeIn = idle ? 1 : clamp(t / 1.2, 0, 1);
+  for (let s = 0; s < skyC.length; s++) {
+    const c = skyC[s]; if (cellPal[c] !== 255) continue;
+    const tw = (0.5 + 0.5 * Math.sin(tt * skySp[s] + skyPh[s])) * fadeIn;
+    if (tw < 0.22) continue;
+    if (tw > 0.94) { cellCh[c] = CH.star; cellPal[c] = P_SKY + 2; }
+    else if (tw > 0.7) { cellCh[c] = CH.plus; cellPal[c] = P_SKY + 1; }
+    else { cellCh[c] = CH.dot; cellPal[c] = tw > 0.45 ? P_SKY + 1 : P_SKY; }
+  }
+
+  if (live) {
+    // ---- 5. 前景雪花（蓋在最上面）----
+    for (let f = 0; f < nActive; f++) {
+      if (!fd[f]) continue;
+      const col = Math.floor((fx[f] - OX) / cellW), row = Math.floor((fy[f] - OY) / cellH);
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+      const c = row * COLS + col;
+      cellCh[c] = fp[f] < 2.5 ? CH.star : fp[f] < 4.6 ? CH.plus : CH.dot;
+      cellPal[c] = fp[f] < 2.5 ? P_SNOW + 2 : P_SNOW + 1;
+    }
+    // ---- 6. 頂端星星：中心 @，八道星芒隨節拍與旋律伸縮 ----
+    //        \ | /
+    //       --=@=--
+    //        / | \
+    if (t >= TL.star) {
+      const age = t - TL.star, flare = Math.exp(-age * 2.2), grow = clamp(age / 0.45, 0, 1);
+      const e = (0.5 + 0.5 * Math.sin(t * 3.1) + beatPulse * 0.7 + noteFlash * 0.4 + flare * 2.2) * grow;
+      const c0 = Math.floor((starSX - OX) / cellW), r0 = Math.floor((starSY - OY) / cellH);
+      const put = (col, row, ch, p) => {
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
+        const c = row * COLS + col; cellCh[c] = ch; cellPal[c] = p;
+      };
+      const ray = (dc, dr, len, ch) => {
+        for (let s = 1; s <= len; s++) {
+          const f = s / len;
+          put(c0 + dc * s, r0 + dr * s, s === len && len > 1 ? CH.dot : ch, f <= 0.5 ? P_STAR + 2 : f < 1 ? P_STAR + 1 : P_STAR);
+        }
+      };
+      const Lh = Math.round((3 + 3 * e) * grow), Lv = Math.round((1.5 + 1.6 * e) * grow), Ld = Math.round((1.5 + 1.3 * e) * grow);
+      ray(1, 0, Lh, CH.dash); ray(-1, 0, Lh, CH.dash);
+      ray(0, -1, Lv, RAY_CH[2]); ray(0, 1, Lv, RAY_CH[2]);
+      ray(1, -1, Ld, RAY_CH[1]); ray(-1, 1, Ld, RAY_CH[1]);
+      ray(-1, -1, Ld, RAY_CH[3]); ray(1, 1, Ld, RAY_CH[3]);
+      if (Lh >= 2) { put(c0 - 1, r0, CH.eq, P_STAR + 2); put(c0 + 1, r0, CH.eq, P_STAR + 2); }
+      put(c0, r0, CH.at, P_STAR + 2);
+    }
+    // ---- 7. 火花 ----
+    for (let i = 0; i < sN; i++) {
+      const col = Math.floor((sx[i] - OX) / cellW), row = Math.floor((sy[i] - OY) / cellH);
+      if (col < 0 || col >= COLS || row < 0 || row >= ROWS) continue;
+      const c = row * COLS + col, f = sl[i] / sL[i];
+      cellCh[c] = f > 0.6 ? CH.star : f > 0.3 ? CH.plus : CH.dot;
+      cellPal[c] = f > 0.5 ? P_SPARK + 1 : P_SPARK;
+    }
+  }
+
+  // ---- 8. 背景 ----
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = BG_GRAD; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = BG_COOL; ctx.fillRect(0, 0, W, H);
+  if (live) {
+    const warm = clamp((t - TL.lightsStart) / 6, 0, 1) * (0.8 + 0.2 * beatPulse);
+    if (warm > 0) { ctx.globalAlpha = warm; ctx.fillStyle = BG_WARM; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  }
+
+  // ---- 9. 光暈（疊加混色）----
+  if (live && (nGlow || t >= TL.star)) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (let g = 0; g < nGlow; g++) {
+      const c = glowC[g], row = (c / COLS) | 0, col = c - row * COLS, I = glowI[g];
+      const cx = OX + (col + 0.5) * cellW, cy = OY + (row + 0.5) * cellH, s = cellH * (2.6 + I * 2.2);
+      ctx.globalAlpha = clamp(I * 0.6, 0, 0.9);
+      ctx.drawImage(GLOW[glowK[g]], cx - s / 2, cy - s / 2, s, s);
+    }
+    if (t >= TL.star) {
+      const flare = Math.exp(-(t - TL.star) * 2.2);
+      const s = cellH * (9 + 2.5 * Math.sin(t * 2.7)) * (1 + flare * 1.6 + noteFlash * 0.15);
+      ctx.globalAlpha = clamp(0.55 + 0.4 * flare, 0, 1);
+      ctx.drawImage(GLOW_STAR, starSX - s / 2, starSY - s / 2, s, s);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ---- 10. 字元 ----
+  const total = drawCells();
+
+  if (!idle) {
+    drawTitle(t);
+    // 底部資訊列：只在 ?debug 時顯示
+    if (DEBUG && t > 2.5) {
+      ctx.globalAlpha = clamp((t - 2.5) / 1.2, 0, 1);
+      ctx.font = HUD_FONT; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left'; ctx.fillStyle = '#7f8db5';
+      const deg = (((ang * 180 / Math.PI) % 360) + 360) % 360;
+      ctx.fillText(`rotation ${deg.toFixed(2)}°   characters ${total.toLocaleString('en-US')}   lights ${lit}`, 12 + SAL, H - 8 - SAB);
+      if (DEBUG) { ctx.textAlign = 'right'; ctx.fillText(`${fps.toFixed(0)} fps  t=${t.toFixed(1)}s`, W - 12 - SAR, H - 8 - SAB); }
+      ctx.globalAlpha = 1;
+    }
+    // 星星亮起的瞬間，整個畫面微微一閃
+    if (t >= TL.star && t < TL.star + 1.5) {
+      ctx.fillStyle = `rgba(255,236,190,${(0.14 * Math.exp(-(t - TL.star) * 4)).toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+}
+
+const TITLE = 'Merry Christmas', SUB = '聖 誕 快 樂';
+function drawTitle(t) {
+  if (t <= 0) return;
+  const typed = clamp(Math.floor((t - TL.typeStart) / TL.typeStep) + 1, 0, TITLE.length);
+  const mv = smooth(clamp((t - TL.titleMove) / 1.4, 0, 1));
+  const size = lerp(T.bigSize, T.smallSize, mv), y = lerp(T.bigY, T.smallY, mv);
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = `700 ${size.toFixed(1)}px ${MONO}`;
+  const x0 = (W - ctx.measureText(TITLE).width) / 2;
+  const shown = TITLE.slice(0, typed);
+  if (typed > 0) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,190,90,0.6)'; ctx.shadowBlur = size * (0.35 + beatPulse * 0.25);
+    ctx.fillStyle = '#ffd98a'; ctx.fillText(shown, x0, y);
+    ctx.restore();
+  }
+  const typingDone = t >= TL.typeStart + TL.typeStep * TITLE.length;
+  if (t < TL.titleMove + 0.6 && (!typingDone || Math.floor(t * 2.6) % 2 === 0)) {
+    const w = ctx.measureText(shown).width;
+    ctx.fillStyle = '#ffd98a';
+    ctx.fillRect(x0 + w + size * 0.05, y + size * 0.3, size * 0.55, Math.max(2, size * 0.08));
+  }
+  const a = clamp((t - TL.subIn) / 0.9, 0, 1);
+  if (a > 0) {
+    const ss = size * 0.52;
+    ctx.font = `500 ${ss.toFixed(1)}px ${CJK}`; ctx.textAlign = 'center';
+    ctx.save();
+    ctx.globalAlpha = a; ctx.shadowColor = 'rgba(255,90,110,0.55)'; ctx.shadowBlur = ss * 0.5;
+    ctx.fillStyle = '#ff8593'; ctx.fillText(SUB, W / 2, y + size * 0.98 + (1 - a) * 6);
+    ctx.restore();
+  }
+}
+
+/* =====================================================================
+ * 主迴圈
+ * ===================================================================== */
+let lastFrame = performance.now(), fps = 60;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = (now - lastFrame) / 1000; lastFrame = now;
+  if (rdt > 0) fps = lerp(fps, 1 / rdt, 0.05);
+  if (mode === 'idle') { render(0, true, now / 1000); return; }
+  let t = clockNow();
+  if (t < tPrev) t = tPrev;
+  const dt = tPrev < 0 ? 0 : clamp(t - tPrev, 0, 0.05);
+  tPrev = t;
+  update(t, dt);
+  render(t, false, t);
+}
+
+/* =====================================================================
+ * 錄影：canvas.captureStream + MediaRecorder（含合成的音樂）
+ * ===================================================================== */
+let rec = null, recChunks = [];
+const canRecord = typeof MediaRecorder !== 'undefined' && typeof cv.captureStream === 'function';
+function startRec() {
+  const stream = cv.captureStream(30);
+  if (recDest) recDest.stream.getAudioTracks().forEach(tr => stream.addTrack(tr));
+  const types = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  const mime = types.find(tp => { try { return MediaRecorder.isTypeSupported(tp); } catch (e) { return false; } }) || '';
+  try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8e6 } : undefined); }
+  catch (e) { rec = null; alert('這個瀏覽器不支援錄影，請改用螢幕錄影。'); return; }
+  recChunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = () => {
+    const type = (rec && rec.mimeType) || mime || 'video/webm';
+    const blob = new Blob(recChunks, { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `merry-christmas.${type.includes('mp4') ? 'mp4' : 'webm'}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    rec = null; recBtn.classList.remove('on');
+  };
+  rec.start(1000);
+  recBtn.classList.add('on');
+}
+
+/* =====================================================================
+ * 事件
+ * ===================================================================== */
+const tapEl = document.getElementById('tap'), ctlEl = document.getElementById('ctl');
+const muteBtn = document.getElementById('mute'), againBtn = document.getElementById('again'), recBtn = document.getElementById('rec');
+if (!canRecord) recBtn.hidden = true;
+
+function setMuted(m) {
+  muted = m;
+  muteBtn.setAttribute('aria-pressed', String(m));
+  if (AC && master) master.gain.setTargetAtTime(m ? 0 : MASTER_VOL, AC.currentTime, 0.04);
+}
+
+// 瀏覽器只在使用者互動後才允許發聲：任何點擊、觸控、按鍵都會接上音樂
+// （用 capture 先於按鈕本身的處理，錄影鈕才能一開始就錄到聲音）
+for (const ev of ['pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(ev, enableAudio, true);
+muteBtn.addEventListener('click', () => setMuted(!muted));
+againBtn.addEventListener('click', () => newRun(0));
+recBtn.addEventListener('click', () => {
+  if (rec) { rec.stop(); return; }
+  newRun(0); startRec();
+});
+cv.addEventListener('pointerdown', e => {
+  if (mode !== 'run') return;
+  burst(e.clientX, e.clientY, 28, cellW * 18);
+  boost = 1;
+});
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'm') setMuted(!muted);
+  else if (k === 'r') newRun(0);
+});
+// 切到背景時暫停時鐘，回來後從原地繼續，畫面與音樂仍然同步
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    hiddenAt = performance.now();
+    if (audioLive && !rec) AC.suspend();
+  } else {
+    if (!audioLive && hiddenAt) runStartPerf += (performance.now() - hiddenAt) / 1000;
+    hiddenAt = 0;
+    if (audioLive && mode === 'run') AC.resume();
+  }
+});
+let resizeTimer = 0;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layout, 120); });
+
+if (DEBUG) window.__xmas = {
+  get t() { return mode === 'run' ? clockNow() : 0; }, get points() { return N; }, get grid() { return [COLS, ROWS]; },
+  get flakes() { return nActive; }, get audio() { return AC ? AC.state : 'none'; }, newRun,
+};
+
+// 載入後直接開始動畫
+layout();
+ctlEl.classList.add('show');
+newRun(SEEK);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
