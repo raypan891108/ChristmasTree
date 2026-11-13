@@ -5,7 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#05070f">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Merry Christmas · ASCII Tree</title>
+<title>ASCII Christmas Tree</title>
+<meta name="description" content="A 3D ASCII Christmas tree in a single HTML file — no frameworks, with synthesized music. 用一個 HTML 檔做出會跟音樂閃爍的 3D ASCII 聖誕樹。">
+<link rel="canonical" href="https://raypan891108.github.io/ChristmasTree/">
+<!-- 分享預覽（LINE、Facebook、X、Slack 等貼上連結時顯示的卡片） -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ASCII Christmas Tree">
+<meta property="og:title" content="ASCII Christmas Tree 🎄">
+<meta property="og:description" content="A 3D ASCII Christmas tree in a single HTML file — no frameworks, with synthesized music.">
+<meta property="og:url" content="https://raypan891108.github.io/ChristmasTree/">
+<meta property="og:image" content="https://raypan891108.github.io/ChristmasTree/screenshots/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A glowing ASCII Christmas tree with colored lights, a star and falling snow on a night sky">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎄</text></svg>">
 <style>
   :root {
@@ -43,13 +56,50 @@
     top: calc(env(safe-area-inset-top, 0px) + 10px); right: calc(env(safe-area-inset-right, 0px) + 10px);
   }
   #ctl.show { opacity: 1; pointer-events: auto; }
-  #ctl button {
+  #ctl button, #ctl a {
     width: 38px; height: 38px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
     color: var(--ink); background: rgba(10, 14, 30, .55); border: 1px solid rgba(200, 215, 255, .18);
     -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   }
-  #ctl button:hover { border-color: rgba(255, 217, 138, .55); }
-  #ctl button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  #ctl a { color: var(--dim); }
+  #ctl button:hover, #ctl a:hover { border-color: rgba(255, 217, 138, .55); color: var(--ink); }
+  #ctl button:focus-visible, #ctl a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* 「送一棵聖誕樹給朋友」：填名字與祝福語，產生專屬連結 */
+  .modal {
+    position: fixed; inset: 0; z-index: 4; display: grid; place-items: center;
+    padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    background: rgba(3, 5, 12, .72); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  }
+  .sheet {
+    position: relative; width: 100%; max-width: 420px; max-height: 100%; overflow: auto;
+    display: grid; gap: 8px; padding: 22px 20px 20px; border-radius: 16px;
+    background: #0c1226; border: 1px solid rgba(255, 217, 138, .22); box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+    font: 400 14px/1.5 var(--cjk); color: var(--ink); -webkit-user-select: text; user-select: text;
+  }
+  .sheet h2 { margin: 0 32px 6px 0; font: 600 18px/1.35 var(--cjk); color: var(--gold); text-wrap: balance; }
+  .sheet h2 span { display: block; font: 400 12.5px/1.5 var(--mono); color: var(--dim); letter-spacing: .02em; }
+  .sheet label { margin-top: 4px; font-size: 13px; color: var(--dim); }
+  .sheet small { font-size: 12px; }
+  .sheet input, .sheet textarea {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(200, 215, 255, .2);
+    background: #070b1a; color: var(--ink); font: 400 16px/1.4 var(--cjk); resize: vertical;
+  }
+  .sheet input:focus, .sheet textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: transparent; }
+  .sheet #f-link { font: 400 13px/1.4 var(--mono); color: var(--dim); }
+  .sheet .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .sheet .row button {
+    flex: 1 1 140px; padding: 11px 14px; border-radius: 999px; cursor: pointer; font: 600 14px/1 var(--cjk);
+    border: 1px solid rgba(255, 217, 138, .45); background: transparent; color: var(--gold);
+  }
+  .sheet .row button[type="submit"] { background: var(--gold); color: #0b1020; border-color: var(--gold); }
+  .sheet .row button:focus-visible, .sheet .x:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .sheet .note { min-height: 1.5em; margin: 0; font-size: 12.5px; color: var(--gold); }
+  .sheet .x {
+    position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    border: 0; background: transparent; color: var(--dim); font: 400 22px/1 var(--mono);
+  }
   #mute .x { display: none; }
   #mute[aria-pressed="true"] { color: var(--dim); }
   #mute[aria-pressed="true"] .w { display: none; }
@@ -66,6 +116,11 @@
 <div id="tap" role="status">♪ 點一下畫面播放音樂</div>
 
 <div id="ctl">
+  <button id="cardbtn" type="button" title="送一棵聖誕樹給朋友 Send this tree to someone" aria-label="送一棵聖誕樹給朋友" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>
+    </svg>
+  </button>
   <button id="mute" type="button" aria-pressed="false" title="聲音開關 (M)" aria-label="聲音開關">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M11 5 6 9H3v6h3l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="M16 9l5 6M21 9l-5 6"/>
@@ -79,6 +134,31 @@
   <button id="rec" type="button" title="從頭錄成影片，再按一次停止並下載" aria-label="錄影">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>
   </button>
+  <a id="src" href="https://github.com/raypan891108/ChristmasTree" target="_blank" rel="noopener" title="View source on GitHub" aria-label="View source on GitHub">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>
+    </svg>
+  </a>
+</div>
+
+<div id="card" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="card-h">
+  <form id="card-form" class="sheet" autocomplete="off">
+    <h2 id="card-h">送一棵聖誕樹給朋友<span>Send this tree to someone</span></h2>
+    <label for="f-to">收件人 To</label>
+    <input id="f-to" name="to" maxlength="20" placeholder="例如：Amy">
+    <label for="f-msg">祝福語 Message <small>（每行一句，最多 3 行）</small></label>
+    <textarea id="f-msg" name="msg" rows="3" maxlength="180" placeholder="祝你聖誕快樂&#10;新的一年也要開心"></textarea>
+    <label for="f-from">署名 From</label>
+    <input id="f-from" name="from" maxlength="20" placeholder="例如：Ray">
+    <label for="f-link">專屬連結 Your link</label>
+    <input id="f-link" readonly>
+    <div class="row">
+      <button type="button" id="f-copy">複製連結 Copy</button>
+      <button type="submit" id="f-open">預覽 Preview</button>
+    </div>
+    <p class="note" id="f-note" role="status"></p>
+    <button type="button" id="f-close" class="x" aria-label="關閉 Close">×</button>
+  </form>
 </div>
 
 <noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0">請開啟 JavaScript 才能觀看。</p></noscript>
@@ -113,6 +193,16 @@ const params = new URLSearchParams(location.search);
 const SEEK = Math.max(0, parseFloat(params.get('t')) || 0);   // ?t=20 直接跳到第 20 秒
 const DEBUG = params.has('debug');                            // ?debug 顯示 FPS
 
+/* ---- 專屬祝福連結：?to=收件人&msg=祝福語（換行或 | 分行）&from=署名 ----
+ * 文字只用 canvas 的 fillText 畫出來，不會被當成 HTML，所以不怕被塞入程式碼 */
+const CARD_ENABLED = true;           // 發布到 claude.ai 時改成 false：那裡的網址帶不了參數
+const clip = (s, n) => Array.from(String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim()).slice(0, n).join('');
+const TO = clip(params.get('to'), 20);
+const FROM = clip(params.get('from'), 20);
+const MSG = String(params.get('msg') || '').split(/\r?\n|\|/).map(s => clip(s, 60)).filter(Boolean).slice(0, 3);
+const SIGN = FROM ? `— ${FROM}` : '';
+const HAS_MSG = MSG.length > 0 || SIGN !== '';
+
 /* =====================================================================
  * 節奏與時間軸（以小節為單位，讓畫面跟音樂對齊）
  * ===================================================================== */
@@ -129,6 +219,7 @@ const TL = {
   ornStart: 11 * BAR, ornEnd: 12.75 * BAR,             // 彩球
   star: 13 * BAR,                                      // 頂端星星（約 21.7 秒）
   snow: 13 * BAR,                                      // 開始下雪、燈跟著節拍閃
+  msg: 14.5 * BAR,                                     // 有祝福語時開始打字（約 24 秒）
 };
 
 /* =====================================================================
@@ -305,7 +396,7 @@ let fs = 10, cellW = 6, cellH = 10, COLS = 1, ROWS = 1, NC = 1, OX = 0, OY = 0, 
 let zbuf, cellPt, cellCh, cellPal, order, runBuf;
 let skyC = new Int32Array(0), skyPh = new Float32Array(0), skySp = new Float32Array(0);
 let FMAX = 200;
-let BG_GRAD, BG_COOL, BG_WARM;
+let BG_GRAD, BG_COOL, BG_WARM, MSG_BACK, MSG_H = 0, msgTop = 0;
 const T = { bigSize: 40, smallSize: 28, bigY: 300, smallY: 40 };
 const pcount = new Int32Array(NPAL), pstart = new Int32Array(NPAL), pfill = new Int32Array(NPAL);
 
@@ -328,21 +419,26 @@ function layout() {
   gridH = H - SAB - (DEBUG ? hudFs + 12 : 2);    // 數值列只在 ?debug 時保留空間
 
   // 標題：開場在中間，之後縮小移到上方
-  T.bigSize = Math.min(W * 0.082, H * 0.075, 62);
-  T.smallSize = Math.min(W * 0.058, H * 0.045, 34);
+  // 標題可能帶收件人名字，用實際量到的寬度決定字級，才不會超出螢幕
+  ctx.font = `700 100px ${MONO}`;
+  const w100 = Math.max(1, ctx.measureText(TITLE).width);
+  T.bigSize = Math.min(W * 0.9 * 100 / w100, H * 0.075, 62);
+  T.smallSize = Math.min(W * 0.84 * 100 / w100, H * 0.045, 34);
   T.bigY = H * 0.4;
   // 窄螢幕時右上角按鈕會擋到標題，所以標題往下移到按鈕下方
   T.smallY = SAT + (W < 600 ? 60 : 14) + T.smallSize * 0.62;
   const titleBottom = T.smallY + T.smallSize * 1.6 + 8;
 
-  // 讓整棵樹（含星星與前方地面）剛好塞進標題下方到地面之間
-  const top = Math.max(H * 0.17, titleBottom + 10), bottom = gridH * 0.94;
+  // 讓整棵樹（含星星與前方地面）剛好塞進標題下方到地面之間；有祝福語時，底部留一塊給文字
+  MSG_H = HAS_MSG ? clamp(H * 0.24, 130, 230) : 0;
+  const top = Math.max(H * 0.17, titleBottom + 10), bottom = HAS_MSG ? gridH - MSG_H : gridH * 0.94;
   const a = projUnitY(STAR_Y + 0.3, 0), b = projUnitY(GROUND_Y, -1.25);   // 0.3 = 星芒的高度
   const span = b - a;
   // 視窗剛開時高度可能還是 0（內嵌頁面、App 內瀏覽器），比例不能變負數，否則整頁當掉變黑
   SCALE = Math.max(5, Math.min((bottom - top) / span, 0.86 * W / (2 * R0 * 1.08)));
   const extra = (bottom - top) - span * SCALE;
-  CYp = top - a * SCALE + extra * 0.72;
+  CYp = top - a * SCALE + extra * (HAS_MSG ? 0.5 : 0.72);
+  msgTop = CYp + b * SCALE + 6;
   CXp = W / 2;
   FOCAL = CAM_D * SCALE;
   starSX = CXp; starSY = CYp + projUnitY(STAR_Y, 0) * SCALE;
@@ -381,6 +477,8 @@ function layout() {
   BG_COOL.addColorStop(0, 'rgba(40,70,150,0.2)'); BG_COOL.addColorStop(1, 'rgba(40,70,150,0)');
   BG_WARM = ctx.createRadialGradient(CXp, treeMidY, 0, CXp, treeMidY, SCALE * 1.9);
   BG_WARM.addColorStop(0, 'rgba(255,170,80,0.16)'); BG_WARM.addColorStop(1, 'rgba(255,170,80,0)');
+  MSG_BACK = ctx.createLinearGradient(0, msgTop - 30, 0, msgTop + 40);
+  MSG_BACK.addColorStop(0, 'rgba(4,6,14,0)'); MSG_BACK.addColorStop(1, 'rgba(4,6,14,0.62)');
 }
 
 /* =====================================================================
@@ -975,6 +1073,7 @@ function render(t, idle, tt) {
   const total = drawCells();
 
   if (!idle) {
+    drawMessage(t);
     drawTitle(t);
     // 底部資訊列：只在 ?debug 時顯示
     if (DEBUG && t > 2.5) {
@@ -993,7 +1092,50 @@ function render(t, idle, tt) {
   }
 }
 
-const TITLE = 'Merry Christmas', SUB = '聖 誕 快 樂';
+/* ---- 祝福語：星星亮起後在樹下一行一行打出來，最後淡入署名 ---- */
+const MSG_CPS = 0.12, MSG_GAP = 0.6;      // 每個字 0.12 秒，每行之間停 0.6 秒
+function drawMessage(t) {
+  if (!HAS_MSG || t < TL.msg) return;
+  const areaB = gridH - 50;               // 底部留給「點一下畫面播放音樂」提示
+  let size = clamp(Math.min(W * 0.05, MSG_H / 7), 13, 24);
+  ctx.font = `500 ${size.toFixed(1)}px ${CJK}`;
+  let maxW = 0;
+  for (const line of MSG) maxW = Math.max(maxW, ctx.measureText(line).width);
+  if (maxW > W * 0.88) { size = Math.max(11, size * W * 0.88 / maxW); ctx.font = `500 ${size.toFixed(1)}px ${CJK}`; maxW = Math.min(maxW, W * 0.88); }
+  const lh = size * 1.7, rows = MSG.length + (SIGN ? 1 : 0);
+  const y0 = msgTop + Math.max(0, (areaB - msgTop - lh * rows) / 2) + lh * 0.5;
+  ctx.globalAlpha = clamp((t - TL.msg) / 1.2, 0, 1);
+  ctx.fillStyle = MSG_BACK; ctx.fillRect(0, msgTop - 30, W, H - msgTop + 30);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  let st = TL.msg + 0.5;
+  for (let i = 0; i < MSG.length; i++) {
+    const chars = Array.from(MSG[i]), n = clamp(Math.floor((t - st) / MSG_CPS) + 1, 0, chars.length);
+    const y = y0 + i * lh, x0 = (W - ctx.measureText(MSG[i]).width) / 2;
+    if (n > 0) {
+      const shown = chars.slice(0, n).join('');
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,190,90,0.45)'; ctx.shadowBlur = size * 0.6;
+      ctx.fillStyle = '#fff6e6'; ctx.fillText(shown, x0, y);
+      ctx.restore();
+      if (n < chars.length) {
+        ctx.fillStyle = '#ffd98a';
+        ctx.fillRect(x0 + ctx.measureText(shown).width + 2, y - size * 0.5, Math.max(1.5, size * 0.08), size);
+      }
+    }
+    st += chars.length * MSG_CPS + MSG_GAP;
+  }
+  const sa = clamp((t - st - 0.2) / 1.0, 0, 1);
+  if (SIGN && sa > 0) {
+    ctx.globalAlpha = sa;
+    ctx.font = `500 ${(size * 0.9).toFixed(1)}px ${CJK}`; ctx.textAlign = MSG.length ? 'right' : 'center';
+    ctx.fillStyle = '#ffd98a';
+    ctx.fillText(SIGN, MSG.length ? (W + maxW) / 2 : W / 2, y0 + MSG.length * lh + 2);
+    ctx.globalAlpha = 1;
+  }
+}
+
+const TITLE = TO ? `Merry Christmas, ${TO}` : 'Merry Christmas', SUB = '聖 誕 快 樂';
 function drawTitle(t) {
   if (t <= 0) return;
   const typed = clamp(Math.floor((t - TL.typeStart) / TL.typeStep) + 1, 0, TITLE.length);
@@ -1102,10 +1244,51 @@ cv.addEventListener('pointerdown', e => {
 });
 window.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Escape' && !cardEl.hidden) { closeCard(); return; }
+  if (e.target && e.target.closest && e.target.closest('input, textarea')) return;   // 正在打字時不觸發快捷鍵
   const k = e.key.toLowerCase();
   if (k === 'm') setMuted(!muted);
   else if (k === 'r') newRun(0);
 });
+
+/* ---- 「送一棵聖誕樹給朋友」面板：填好就產生專屬連結 ---- */
+const cardBtn = document.getElementById('cardbtn'), cardEl = document.getElementById('card');
+const cardForm = document.getElementById('card-form'), fTo = document.getElementById('f-to');
+const fMsg = document.getElementById('f-msg'), fFrom = document.getElementById('f-from');
+const fLink = document.getElementById('f-link'), fNote = document.getElementById('f-note');
+if (!CARD_ENABLED) cardBtn.hidden = true;
+if (TO) document.title = `Merry Christmas, ${TO} 🎄`;
+
+function cardLink() {
+  const u = new URL(location.href.split('#')[0]);
+  u.search = '';
+  const to = clip(fTo.value, 20), from = clip(fFrom.value, 20);
+  const msg = fMsg.value.split(/\r?\n/).map(s => clip(s, 60)).filter(Boolean).slice(0, 3).join('\n');
+  if (to) u.searchParams.set('to', to);
+  if (msg) u.searchParams.set('msg', msg);
+  if (from) u.searchParams.set('from', from);
+  return u.toString();
+}
+function openCard() {
+  fTo.value = TO; fMsg.value = MSG.join('\n'); fFrom.value = FROM;
+  fLink.value = cardLink(); fNote.textContent = '';
+  cardEl.hidden = false;
+  fTo.focus();
+}
+function closeCard() { cardEl.hidden = true; cardBtn.focus(); }
+cardBtn.addEventListener('click', openCard);
+document.getElementById('f-close').addEventListener('click', closeCard);
+cardEl.addEventListener('click', e => { if (e.target === cardEl) closeCard(); });   // 點旁邊的暗處關閉
+cardForm.addEventListener('input', () => { fLink.value = cardLink(); fNote.textContent = ''; });
+document.getElementById('f-copy').addEventListener('click', () => {
+  const link = cardLink();
+  fLink.value = link;
+  const fallback = () => { fLink.focus(); fLink.select(); fNote.textContent = '已選取連結，請按複製 Selected — copy it manually'; };
+  try {
+    navigator.clipboard.writeText(link).then(() => { fNote.textContent = '已複製連結 Copied'; }, fallback);
+  } catch (err) { fallback(); }
+});
+cardForm.addEventListener('submit', e => { e.preventDefault(); location.href = cardLink(); });
 // 切到背景時暫停時鐘，回來後從原地繼續，畫面與音樂仍然同步
 document.addEventListener('visibilitychange', () => {
   if (mode !== 'run' || rec) return;

@@ -1,98 +1,113 @@
-# ASCII 聖誕樹 🎄
+# ASCII Christmas Tree 🎄
 
-![ASCII 聖誕樹完成畫面：星星、彩燈、彩球與飄雪](screenshots/hero.png)
+**A 3D ASCII Christmas tree in a single HTML file — no frameworks, with synthesized music.**
 
-一棵用 ASCII 字元畫出來的 3D 聖誕樹。打開網頁就會開始播：先打出 `Merry Christmas`，接著長出樹，再掛上彩帶、彩燈和彩球。星星亮起後開始飄雪，燈會跟著 Jingle Bells 的節拍閃。
+**English** · [繁體中文](README.zh-TW.md)
 
-**👉 線上看：https://raypan891108.github.io/ChristmasTree/**
-
-整個作品只有一個 `index.html`。全部用純 JavaScript 寫成：Canvas 2D 負責畫面，Web Audio 負責音樂。不需要任何框架，也不載入圖片或音檔。
-
-## 畫面
+### ▶ [Live demo](https://raypan891108.github.io/ChristmasTree/) · [Example card for “Amy”](https://raypan891108.github.io/ChristmasTree/?to=Amy&msg=Merry%20Christmas!%7CWishing%20you%20a%20joyful%20new%20year&from=Ray)
 
 <p align="center">
-  <img src="screenshots/build-up.gif" width="300" alt="從打字、長樹、掛燈到星星亮起的動畫過程（2 倍速）">
+  <img src="screenshots/build-up.gif" width="300" alt="The title types itself, the tree grows from the bottom up, lights switch on one by one and the star lights up (2× speed)">
 </p>
 
-| 1. 開場打字 | 2. 長樹 | 3. 掛彩帶與彩燈 | 4. 星星與飄雪 |
+- **One file.** Everything lives in `index.html`: no frameworks, no build step, no images or audio files to download.
+- **Real 3D, drawn with characters.** About 20,000 points are rotated, projected and depth-tested onto a character grid with Canvas 2D.
+- **Music made in the browser.** Jingle Bells is synthesized live with the Web Audio API, and the lights flash on the beat.
+- **Send it to someone.** Add a name and a message to the URL and the tree becomes a personal Christmas card.
+
+![The finished tree: star, colored lights, ornaments and falling snow](screenshots/hero.png)
+
+> Browsers block sound until you interact with the page, so tap anywhere once to start the music. It picks up exactly where the animation is.
+
+## Send it to someone
+
+Tap **✉** at the top right, fill in a name, a message and your signature, then copy the link. Or build the URL yourself:
+
+```
+https://raypan891108.github.io/ChristmasTree/?to=Amy&msg=Merry%20Christmas!%7CWishing%20you%20a%20joyful%20new%20year&from=Ray
+```
+
+| Parameter | What it does | Limit |
+| --- | --- | --- |
+| `to` | Puts the name in the title: *Merry Christmas, Amy* | 20 characters |
+| `msg` | Types the message under the tree after the star lights up. Separate lines with a line break or `\|` | 3 lines, 60 characters each |
+| `from` | Signs the message: *— Ray* | 20 characters |
+
+The text is only ever drawn onto the canvas, never inserted into the page as HTML.
+
+<p align="center">
+  <img src="screenshots/personal-card.png" width="300" alt="A personal card: “Merry Christmas, Amy” above the tree and a two-line message signed “— Ray” below it">
+</p>
+
+## Screenshots
+
+| 1. Title | 2. Growing | 3. Garland and lights | 4. Star and snow |
 | :---: | :---: | :---: | :---: |
-| ![開場打字](screenshots/stage-1-title.png) | ![樹葉由下往上長](screenshots/stage-2-grow.png) | ![彩帶與彩燈依序點亮](screenshots/stage-3-lights.png) | ![星星亮起後開始飄雪](screenshots/stage-4-snow.png) |
+| ![The title typing itself](screenshots/stage-1-title.png) | ![Needles growing from the bottom up](screenshots/stage-2-grow.png) | ![Garland and lights switching on](screenshots/stage-3-lights.png) | ![The star lights up and snow starts falling](screenshots/stage-4-snow.png) |
 
-## 檔案
+## How it works
 
-| 檔案 | 用途 |
+1. **Point cloud.** The needles, trunk, ground, garland, lights and ornaments are about 20,000 points. Each point stores a position, a surface normal, a type and a birth time `t0`; a point is only drawn once the clock passes its `t0`, which is what makes the tree "grow".
+2. **Projection and depth buffer.** Every frame the points are rotated around the Y axis and projected onto a grid of character cells. Each cell keeps only the point closest to the camera.
+3. **Brightness to characters.** Lighting picks a character from `.:-=+*#%@`, and the point's type picks the color. Characters of the same color are joined into strings and drawn in one `fillText` call, which keeps phones at 60 fps.
+4. **Audio as the clock.** Notes are scheduled ahead with Web Audio, and the animation reads the time the speakers are actually playing, so the lights land on the beat. If the audio is paused (the tab goes to the background, a phone call comes in), the animation falls back to a normal clock and the music rejoins on the next tap.
+
+## Timeline
+
+The music runs at 144 BPM, so one bar is about 1.67 seconds; every stage starts on a bar line.
+
+| Time | What happens |
 | --- | --- |
-| `index.html` | 全部的程式：3D 模型、字元渲染、動畫時間軸、音樂合成、錄影 |
-| `screenshots/` | README 用的截圖與動畫 |
-| `README.md` | 這份說明 |
+| 0–3 s | Starry sky; `Merry Christmas` types itself and 聖誕快樂 fades in |
+| 3–13 s | Ground and trunk appear, then the needles grow from the bottom up |
+| 13–21 s | A gold garland spirals up, 110 lights switch on one by one, then the ornaments appear |
+| ~21.7 s | The star lights up with a flash and a burst of sparks |
+| After that | Snow falls; the lights flash on the beat and change pattern every 4 bars. A personal message, if any, is typed out at about 24 s |
 
-## 怎麼看
+The song plays an intro, chorus, verse and a glockenspiel chorus an octave up, about 83 seconds in total, then loops.
 
-1. 打開線上網址，或在電腦上雙擊 `index.html`，動畫會直接開始。
-2. 瀏覽器規定網頁不能自己發出聲音，所以畫面下方會出現「♪ 點一下畫面播放音樂」。點畫面任何地方，音樂就會從動畫目前播到的位置接上去。
-3. iPhone 開著靜音鍵時可能沒有聲音，請先關掉靜音。
+## Controls
 
-## 動畫流程
-
-音樂速度是 144 BPM，一小節約 1.67 秒。每一段動畫都對齊小節開始。
-
-| 時間 | 畫面 |
+| Control | Effect |
 | --- | --- |
-| 0～3 秒 | 星空，`Merry Christmas` 打字出現，「聖誕快樂」淡入 |
-| 3～13 秒 | 地面、樹幹先出現，樹葉由下往上長 |
-| 13～21 秒 | 金色彩帶沿螺旋繞上去，110 顆彩燈依序亮起，接著掛上彩球 |
-| 約 21.7 秒 | 頂端星星亮起，畫面閃一下並噴出火花 |
-| 之後 | 開始飄雪（不會積雪）；燈跟著節拍閃，每 4 小節換一種閃法 |
+| Tap the screen | The first tap starts the music; after that, every tap throws sparks and flashes all the lights |
+| ✉ | Make a personal card link |
+| 🔊 / `M` | Sound on/off |
+| ↻ / `R` | Replay from the start |
+| ● | Record a video from the start; tap again to stop and download it (`.webm` in Chrome, `.mp4` in Safari) |
+| `</>` | View the source on GitHub |
 
-音樂依序為前奏、副歌、主歌、高八度副歌，全長約 83 秒，播完會循環。
+## Run it locally
 
-## 操作
+Double-click `index.html`, or serve the folder:
 
-| 操作 | 效果 |
+```bash
+python3 -m http.server 8000
+```
+
+Then open http://localhost:8000. Two extra URL parameters help while tweaking:
+
+| Parameter | Effect |
 | --- | --- |
-| 點畫面 | 第一次點會開始播音樂；之後每點一次，在點的位置撒出火花，所有燈一起亮一下 |
-| 右上角 🔊 / `M` 鍵 | 開關聲音 |
-| 右上角 ↻ / `R` 鍵 | 從頭重播 |
-| 右上角 ● | 從頭開始錄影，再按一次停止並下載影片 |
+| `?t=20` | Start at second 20 |
+| `?debug` | Show rotation, character count, lights, FPS and the current time |
 
-錄影會把畫面和音樂一起錄進去：Chrome 存成 `.webm`，Safari 存成 `.mp4`。要發 IG Reels 時，也可以錄沒有聲音的版本，再用 App 內的授權音樂庫配樂。
+## Customize
 
-## 更新線上版
+All of these are constants near the top of the `<script>` in `index.html`:
 
-線上網址由 GitHub Pages 提供，直接讀這個 repo `main` 分支的 `index.html`。改完 `index.html` 推上 GitHub，約一分鐘後網址就會更新。
-
-## 本機測試用的網址參數
-
-在網址最後加上參數就能使用，例如 `index.html?t=20&debug`。
-
-| 參數 | 作用 |
+| To change | Constant |
 | --- | --- |
-| `?t=20` | 直接從第 20 秒開始 |
-| `?debug` | 顯示底部數值列（旋轉角度、字元數、燈數）、FPS 和目前秒數 |
+| Tempo | `BPM` |
+| When each stage happens | `TL` (in bars, `BAR`) |
+| Tree size and number of tiers | `TREE_H`, `R0`, `TIERS` |
+| Character density (tree width in characters) | `TARGET_COLS` |
+| Number of points | `N_LEAF`, `N_LIGHTS`, `N_ORN`, … |
+| Rotation speed | `ROT_SPEED` |
+| Colors | the `P_LEAF`, `P_LIGHT`, `P_ORN`, … palettes |
+| Melody | `CHORUS`, `VERSE` as `[MIDI note, beats]` |
 
-## 想調整的話
+## License
 
-這些設定都在 `index.html` 的 `<script>` 開頭附近：
-
-| 想改什麼 | 常數 |
-| --- | --- |
-| 音樂速度 | `BPM` |
-| 各段動畫的時間 | `TL`（以小節 `BAR` 為單位） |
-| 樹的大小、層數 | `TREE_H`、`R0`、`TIERS` |
-| 字元密度（樹寬約幾個字） | `TARGET_COLS` |
-| 點的數量 | `N_LEAF`、`N_LIGHTS`、`N_ORN` 等 |
-| 旋轉速度 | `ROT_SPEED` |
-| 顏色 | `P_LEAF`、`P_LIGHT`、`P_ORN` 等調色盤 |
-| 旋律 | `CHORUS`、`VERSE`，格式是 `[MIDI 音高, 拍數]` |
-
-## 運作原理
-
-1. **3D 點雲**：樹葉、樹幹、地面、彩帶、彩燈、彩球共約 2 萬個點。每個點都記錄位置、法向量、類型和出生時間 `t0`。時間到了 `t0` 才畫出來，看起來就像慢慢長出來。
-2. **投影與深度緩衝**：每一格畫面先繞 Y 軸旋轉，再做透視投影到字元網格。同一格只保留最靠近鏡頭的點。
-3. **挑字元**：依光照亮度從 `.:-=+*#%@` 挑字元，再依類型上色。同一個顏色的字元串成一個字串一起畫，手機也能維持流暢。
-4. **音樂同步**：音符用 Web Audio 預先排程。畫面時鐘讀的是喇叭實際播到的時間，所以燈光會準確落在拍子上。
-
-## 版權
-
-- Jingle Bells（James Lord Pierpont，1857）的旋律已進入公有領域。
-- 音樂由程式即時合成，沒有使用任何錄音檔。
+- Code: [MIT](LICENSE).
+- Music: *Jingle Bells* (James Lord Pierpont, 1857) is in the public domain. It is synthesized in code; no recordings are used.
