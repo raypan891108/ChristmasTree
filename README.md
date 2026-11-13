@@ -7,7 +7,7 @@
 ### ▶ [Live demo](https://raypan891108.github.io/ChristmasTree/) · [Example card for “Amy”](https://raypan891108.github.io/ChristmasTree/?to=Amy&msg=Merry%20Christmas!%7CWishing%20you%20a%20joyful%20new%20year&from=Ray)
 
 <p align="center">
-  <img src="screenshots/build-up.gif" width="300" alt="The title types itself, the tree grows from the bottom up, lights switch on one by one and the star lights up (2× speed)">
+  <img src="screenshots/hero-loop.gif" width="280" alt="The finished tree rotating in 3D, drawn with ASCII characters, with colored lights flashing and snow falling">
 </p>
 
 - **One file.** Everything lives in `index.html`: no frameworks, no build step, no images or audio files to download.
@@ -21,7 +21,7 @@
 
 ## Send it to someone
 
-Tap **✉** at the top right, fill in a name, a message and your signature, then copy the link. Or build the URL yourself:
+Tap **✉** at the top right, or the **🎄 Make your own card** button that shows up for a few seconds after the star lights up (or after a personal message finishes). Fill in a name, a message and your signature, then copy the link. Or build the URL yourself:
 
 ```
 https://raypan891108.github.io/ChristmasTree/?to=Amy&msg=Merry%20Christmas!%7CWishing%20you%20a%20joyful%20new%20year&from=Ray
@@ -45,12 +45,21 @@ The text is only ever drawn onto the canvas, never inserted into the page as HTM
 | :---: | :---: | :---: | :---: |
 | ![The title typing itself](screenshots/stage-1-title.png) | ![Needles growing from the bottom up](screenshots/stage-2-grow.png) | ![Garland and lights switching on](screenshots/stage-3-lights.png) | ![The star lights up and snow starts falling](screenshots/stage-4-snow.png) |
 
+<details>
+<summary>The whole build-up as one animation (2.5× speed)</summary>
+<p align="center">
+  <img src="screenshots/build-up.gif" width="240" alt="The title types itself, the tree grows from the bottom up, lights switch on one by one and the star lights up (2.5× speed)">
+</p>
+</details>
+
 ## How it works
 
 1. **Point cloud.** The needles, trunk, ground, garland, lights and ornaments are about 20,000 points. Each point stores a position, a surface normal, a type and a birth time `t0`; a point is only drawn once the clock passes its `t0`, which is what makes the tree "grow".
 2. **Projection and depth buffer.** Every frame the points are rotated around the Y axis and projected onto a grid of character cells. Each cell keeps only the point closest to the camera.
-3. **Brightness to characters.** Lighting picks a character from `.:-=+*#%@`, and the point's type picks the color. Characters of the same color are joined into strings and drawn in one `fillText` call, which keeps phones at 60 fps.
-4. **Audio as the clock.** Notes are scheduled ahead with Web Audio, and the animation reads the time the speakers are actually playing, so the lights land on the beat. If the audio is paused (the tab goes to the background, a phone call comes in), the animation falls back to a normal clock and the music rejoins on the next tap.
+3. **Brightness to characters.** Lighting picks a character from `.:-=+*#%@`, and the point's type picks the color. Characters of the same color in a row are joined into one string and drawn with a single `fillText` call instead of one call per character. On a phone-sized screen with snow falling, a frame draws about 2,600 characters with roughly 770 calls, which helps on phones.
+4. **Audio as the clock.** Notes are scheduled ahead with Web Audio, and the animation reads the time the speakers are actually playing, so the lights land on the beat.
+   - When the tab goes to the background, the animation and music pause and pick up where they left off when you come back.
+   - If the browser won't let the audio resume on its own (iPhones often don't), or the audio is interrupted by something like a phone call, the animation keeps running on a normal clock and the music rejoins at the current spot on your next tap.
 
 ## Timeline
 
@@ -74,8 +83,10 @@ The song plays an intro, chorus, verse and a glockenspiel chorus an octave up, a
 | ✉ | Make a personal card link |
 | 🔊 / `M` | Sound on/off |
 | ↻ / `R` | Replay from the start |
-| ● | Record a video from the start; tap again to stop and download it (`.webm` in Chrome, `.mp4` in Safari) |
+| ● | Record a video from the start; tap again to stop and download it as MP4 or WebM, depending on what the browser supports |
 | `</>` | View the source on GitHub |
+
+The on-screen text follows the browser language: Chinese for Chinese browsers, English for everything else.
 
 ## Run it locally
 

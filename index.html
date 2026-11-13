@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -79,7 +79,7 @@
     font: 400 14px/1.5 var(--cjk); color: var(--ink); -webkit-user-select: text; user-select: text;
   }
   .sheet h2 { margin: 0 32px 6px 0; font: 600 18px/1.35 var(--cjk); color: var(--gold); text-wrap: balance; }
-  .sheet h2 span { display: block; font: 400 12.5px/1.5 var(--mono); color: var(--dim); letter-spacing: .02em; }
+  .sheet h2 #t-h2 { display: block; font: 400 12.5px/1.5 var(--cjk); color: var(--dim); letter-spacing: .02em; }
   .sheet label { margin-top: 4px; font-size: 13px; color: var(--dim); }
   .sheet small { font-size: 12px; }
   .sheet input, .sheet textarea {
@@ -106,32 +106,46 @@
   #mute[aria-pressed="true"] .x { display: inline; }
   #rec.on { color: #ff5c70; border-color: rgba(255, 92, 112, .7); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: .5; } }
-  @media (prefers-reduced-motion: reduce) { #tap { animation: none; } }
+  /* 「也做一張」按鈕：星星亮起或祝福語打完後短暫出現，讓第一次來的人知道可以做卡片 */
+  #cta {
+    position: fixed; z-index: 2; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+    transform: translate(-50%, 8px); opacity: 0; visibility: hidden; pointer-events: none; white-space: nowrap;
+    transition: opacity .5s, transform .5s, bottom .4s, visibility 0s linear .5s;
+    padding: 12px 20px; border: 0; border-radius: 999px; cursor: pointer;
+    font: 600 15px/1 var(--cjk); color: #0b1020; background: var(--gold);
+    box-shadow: 0 0 0 5px rgba(255, 217, 138, .14), 0 8px 26px rgba(255, 190, 90, .3);
+  }
+  #cta.show { opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0); transition: opacity .5s, transform .5s, bottom .4s; }
+  #cta.low { bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
+  #cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { #tap { animation: none; } #cta { transition: none; } }
 </style>
 </head>
 <body>
-<canvas id="c" aria-label="ASCII 3D 聖誕樹動畫"></canvas>
+<!-- 介面文字預設英文；瀏覽器語言是中文時，由下方 script 換成中文 -->
+<canvas id="c" aria-label="Animated 3D ASCII Christmas tree"></canvas>
 <div id="probe"></div>
 
-<div id="tap" role="status">♪ 點一下畫面播放音樂</div>
+<div id="tap" role="status">♪ Tap anywhere for music</div>
+<button id="cta" type="button" tabindex="-1" aria-hidden="true">🎄 Make your own card</button>
 
 <div id="ctl">
-  <button id="cardbtn" type="button" title="送一棵聖誕樹給朋友 Send this tree to someone" aria-label="送一棵聖誕樹給朋友" aria-haspopup="dialog">
+  <button id="cardbtn" type="button" title="Make a Christmas card" aria-label="Make a Christmas card" aria-haspopup="dialog">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>
     </svg>
   </button>
-  <button id="mute" type="button" aria-pressed="false" title="聲音開關 (M)" aria-label="聲音開關">
+  <button id="mute" type="button" aria-pressed="false" title="Sound on/off (M)" aria-label="Sound on/off">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M11 5 6 9H3v6h3l5 4z"/><path class="w" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="M16 9l5 6M21 9l-5 6"/>
     </svg>
   </button>
-  <button id="again" type="button" title="重新播放 (R)" aria-label="重新播放">
+  <button id="again" type="button" title="Replay (R)" aria-label="Replay">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
     </svg>
   </button>
-  <button id="rec" type="button" title="從頭錄成影片，再按一次停止並下載" aria-label="錄影">
+  <button id="rec" type="button" title="Record a video from the start; tap again to stop and download" aria-label="Record a video">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>
   </button>
   <a id="src" href="https://github.com/raypan891108/ChristmasTree" target="_blank" rel="noopener" title="View source on GitHub" aria-label="View source on GitHub">
@@ -143,25 +157,25 @@
 
 <div id="card" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="card-h">
   <form id="card-form" class="sheet" autocomplete="off">
-    <h2 id="card-h">送一棵聖誕樹給朋友<span>Send this tree to someone</span></h2>
-    <label for="f-to">收件人 To</label>
-    <input id="f-to" name="to" maxlength="20" placeholder="例如：Amy">
-    <label for="f-msg">祝福語 Message <small>（每行一句，最多 3 行）</small></label>
-    <textarea id="f-msg" name="msg" rows="3" maxlength="180" placeholder="祝你聖誕快樂&#10;新的一年也要開心"></textarea>
-    <label for="f-from">署名 From</label>
-    <input id="f-from" name="from" maxlength="20" placeholder="例如：Ray">
-    <label for="f-link">專屬連結 Your link</label>
+    <h2 id="card-h"><span id="t-h">Send this tree to someone</span><span id="t-h2">送一棵聖誕樹給朋友</span></h2>
+    <label for="f-to" id="t-to">To</label>
+    <input id="f-to" name="to" maxlength="20" placeholder="e.g. Amy">
+    <label for="f-msg"><span id="t-msg">Message</span> <small id="t-msg-hint">(up to 3 lines, 60 characters each)</small></label>
+    <textarea id="f-msg" name="msg" rows="3" maxlength="180" placeholder="Merry Christmas!&#10;Wishing you a joyful new year"></textarea>
+    <label for="f-from" id="t-from">From</label>
+    <input id="f-from" name="from" maxlength="20" placeholder="e.g. Ray">
+    <label for="f-link" id="t-link">Your link</label>
     <input id="f-link" readonly>
     <div class="row">
-      <button type="button" id="f-copy">複製連結 Copy</button>
-      <button type="submit" id="f-open">預覽 Preview</button>
+      <button type="button" id="f-copy">Copy link</button>
+      <button type="submit" id="f-open">Preview</button>
     </div>
     <p class="note" id="f-note" role="status"></p>
-    <button type="button" id="f-close" class="x" aria-label="關閉 Close">×</button>
+    <button type="button" id="f-close" class="x" aria-label="Close">×</button>
   </form>
 </div>
 
-<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0">請開啟 JavaScript 才能觀看。</p></noscript>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0">Please turn on JavaScript to see the tree. 請開啟 JavaScript 才能觀看。</p></noscript>
 
 <script>
 (() => {
@@ -202,6 +216,27 @@ const FROM = clip(params.get('from'), 20);
 const MSG = String(params.get('msg') || '').split(/\r?\n|\|/).map(s => clip(s, 60)).filter(Boolean).slice(0, 3);
 const SIGN = FROM ? `— ${FROM}` : '';
 const HAS_MSG = MSG.length > 0 || SIGN !== '';
+
+/* ---- 介面語言：瀏覽器語言是中文就顯示中文，其他一律英文 ---- */
+const ZH = /^zh/i.test(navigator.language || '');
+const TXT = ZH ? {
+  lang: 'zh-Hant', canvas: 'ASCII 3D 聖誕樹動畫', tap: '♪ 點一下畫面播放音樂', cta: '🎄 也做一張送給朋友',
+  card: '做一張聖誕卡送朋友', mute: '聲音開關', again: '重新播放', rec: '錄影', recTitle: '從頭錄成影片，再按一次停止並下載',
+  src: '到 GitHub 看原始碼', h: '送一棵聖誕樹給朋友', h2: 'Send this tree to someone',
+  to: '收件人', msg: '祝福語', msgHint: '（最多 3 行，每行 60 字）', from: '署名', link: '專屬連結',
+  toPh: '例如：小美', msgPh: '祝你聖誕快樂\n新的一年也要開心', fromPh: '例如：Ray',
+  copy: '複製連結', open: '預覽', close: '關閉', copied: '已複製連結', selected: '已選取連結，請按複製',
+  noRec: '這個瀏覽器不支援錄影，請改用螢幕錄影。',
+} : {
+  lang: 'en', canvas: 'Animated 3D ASCII Christmas tree', tap: '♪ Tap anywhere for music', cta: '🎄 Make your own card',
+  card: 'Make a Christmas card', mute: 'Sound on/off', again: 'Replay', rec: 'Record a video',
+  recTitle: 'Record a video from the start; tap again to stop and download',
+  src: 'View source on GitHub', h: 'Send this tree to someone', h2: '送一棵聖誕樹給朋友',
+  to: 'To', msg: 'Message', msgHint: '(up to 3 lines, 60 characters each)', from: 'From', link: 'Your link',
+  toPh: 'e.g. Amy', msgPh: 'Merry Christmas!\nWishing you a joyful new year', fromPh: 'e.g. Ray',
+  copy: 'Copy link', open: 'Preview', close: 'Close', copied: 'Link copied', selected: 'Link selected — copy it manually',
+  noRec: 'This browser can’t record video. Please use your device’s screen recording instead.',
+};
 
 /* =====================================================================
  * 節奏與時間軸（以小節為單位，讓畫面跟音樂對齊）
@@ -430,7 +465,7 @@ function layout() {
   const titleBottom = T.smallY + T.smallSize * 1.6 + 8;
 
   // 讓整棵樹（含星星與前方地面）剛好塞進標題下方到地面之間；有祝福語時，底部留一塊給文字
-  MSG_H = HAS_MSG ? clamp(H * 0.24, 130, 230) : 0;
+  MSG_H = HAS_MSG ? (CARD_ENABLED ? clamp(H * 0.28, 150, 260) : clamp(H * 0.24, 130, 230)) : 0;
   const top = Math.max(H * 0.17, titleBottom + 10), bottom = HAS_MSG ? gridH - MSG_H : gridH * 0.94;
   const a = projUnitY(STAR_Y + 0.3, 0), b = projUnitY(GROUND_Y, -1.25);   // 0.3 = 星芒的高度
   const span = b - a;
@@ -1096,13 +1131,14 @@ function render(t, idle, tt) {
 const MSG_CPS = 0.12, MSG_GAP = 0.6;      // 每個字 0.12 秒，每行之間停 0.6 秒
 function drawMessage(t) {
   if (!HAS_MSG || t < TL.msg) return;
-  const areaB = gridH - 50;               // 底部留給「點一下畫面播放音樂」提示
-  let size = clamp(Math.min(W * 0.05, MSG_H / 7), 13, 24);
+  const areaB = gridH - (CARD_ENABLED ? 110 : 50);   // 底部留給音樂提示與「也做一張」按鈕
+  const rows = MSG.length + (SIGN ? 1 : 0);
+  let size = clamp(Math.min(W * 0.05, MSG_H / 7, (areaB - msgTop) / (rows * 1.7)), 11, 24);
   ctx.font = `500 ${size.toFixed(1)}px ${CJK}`;
   let maxW = 0;
   for (const line of MSG) maxW = Math.max(maxW, ctx.measureText(line).width);
   if (maxW > W * 0.88) { size = Math.max(11, size * W * 0.88 / maxW); ctx.font = `500 ${size.toFixed(1)}px ${CJK}`; maxW = Math.min(maxW, W * 0.88); }
-  const lh = size * 1.7, rows = MSG.length + (SIGN ? 1 : 0);
+  const lh = size * 1.7;
   const y0 = msgTop + Math.max(0, (areaB - msgTop - lh * rows) / 2) + lh * 0.5;
   ctx.globalAlpha = clamp((t - TL.msg) / 1.2, 0, 1);
   ctx.fillStyle = MSG_BACK; ctx.fillRect(0, msgTop - 30, W, H - msgTop + 30);
@@ -1184,6 +1220,7 @@ function frame(now) {
   const dt = tPrev < 0 ? 0 : clamp(t - tPrev, 0, 0.05);
   tPrev = t;
   update(t, dt);
+  updateCta(t);
   render(t, false, t);
 }
 
@@ -1198,7 +1235,7 @@ function startRec() {
   const types = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
   const mime = types.find(tp => { try { return MediaRecorder.isTypeSupported(tp); } catch (e) { return false; } }) || '';
   try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8e6 } : undefined); }
-  catch (e) { rec = null; alert('這個瀏覽器不支援錄影，請改用螢幕錄影。'); return; }
+  catch (e) { rec = null; alert(TXT.noRec); return; }
   recChunks = [];
   rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
   rec.onstop = () => {
@@ -1259,6 +1296,46 @@ const fLink = document.getElementById('f-link'), fNote = document.getElementById
 if (!CARD_ENABLED) cardBtn.hidden = true;
 if (TO) document.title = `Merry Christmas, ${TO} 🎄`;
 
+// 依瀏覽器語言套用介面文字
+function applyText() {
+  const $ = id => document.getElementById(id);
+  document.documentElement.lang = TXT.lang;
+  cv.setAttribute('aria-label', TXT.canvas);
+  tapEl.textContent = TXT.tap;
+  ctaEl.textContent = TXT.cta;
+  for (const [id, label, title] of [['cardbtn', TXT.card, TXT.card], ['mute', TXT.mute, `${TXT.mute} (M)`],
+    ['again', TXT.again, `${TXT.again} (R)`], ['rec', TXT.rec, TXT.recTitle], ['src', TXT.src, TXT.src]]) {
+    $(id).setAttribute('aria-label', label); $(id).title = title;
+  }
+  for (const [id, key] of [['t-h', 'h'], ['t-h2', 'h2'], ['t-to', 'to'], ['t-msg', 'msg'], ['t-msg-hint', 'msgHint'],
+    ['t-from', 'from'], ['t-link', 'link'], ['f-copy', 'copy'], ['f-open', 'open']]) $(id).textContent = TXT[key];
+  $('f-close').setAttribute('aria-label', TXT.close);
+  fTo.placeholder = TXT.toPh; fMsg.placeholder = TXT.msgPh; fFrom.placeholder = TXT.fromPh;
+}
+
+/* ---- 「也做一張」按鈕：有祝福語時等署名打完，沒有時在星星亮起後，出現 12 秒 ---- */
+const ctaEl = document.getElementById('cta');
+let ctaShown = false, ctaLow = false, ctaUsed = false;
+function ctaStart() {
+  if (!HAS_MSG) return TL.star + 3 * BAR;
+  let st = TL.msg + 0.5;
+  for (const line of MSG) st += Array.from(line).length * MSG_CPS + MSG_GAP;
+  return st + (SIGN ? 1.2 : 0) + 1;
+}
+const CTA_IN = ctaStart(), CTA_OUT = CTA_IN + 12;
+function updateCta(t) {
+  const want = CARD_ENABLED && !ctaUsed && cardEl.hidden && t >= CTA_IN && t < CTA_OUT;
+  if (want !== ctaShown) {
+    ctaShown = want;
+    ctaEl.classList.toggle('show', want);
+    ctaEl.tabIndex = want ? 0 : -1;
+    ctaEl.setAttribute('aria-hidden', String(!want));
+  }
+  const low = tapEl.classList.contains('hide');      // 音樂提示消失後，按鈕往下移到底部
+  if (low !== ctaLow) { ctaLow = low; ctaEl.classList.toggle('low', low); }
+}
+ctaEl.addEventListener('click', () => { ctaUsed = true; updateCta(-1); openCard(); });
+
 function cardLink() {
   const u = new URL(location.href.split('#')[0]);
   u.search = '';
@@ -1283,9 +1360,9 @@ cardForm.addEventListener('input', () => { fLink.value = cardLink(); fNote.textC
 document.getElementById('f-copy').addEventListener('click', () => {
   const link = cardLink();
   fLink.value = link;
-  const fallback = () => { fLink.focus(); fLink.select(); fNote.textContent = '已選取連結，請按複製 Selected — copy it manually'; };
+  const fallback = () => { fLink.focus(); fLink.select(); fNote.textContent = TXT.selected; };
   try {
-    navigator.clipboard.writeText(link).then(() => { fNote.textContent = '已複製連結 Copied'; }, fallback);
+    navigator.clipboard.writeText(link).then(() => { fNote.textContent = TXT.copied; }, fallback);
   } catch (err) { fallback(); }
 });
 cardForm.addEventListener('submit', e => { e.preventDefault(); location.href = cardLink(); });
@@ -1311,6 +1388,7 @@ if (DEBUG) window.__xmas = {
 };
 
 // 載入後直接開始動畫
+applyText();
 layout();
 ctlEl.classList.add('show');
 newRun(SEEK);
