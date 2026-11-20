@@ -258,21 +258,22 @@ const TXT = ZH ? {
 /* =====================================================================
  * 節奏與時間軸（以小節為單位，讓畫面跟音樂對齊）
  * ===================================================================== */
-const BPM = 180, BEAT = 60 / BPM, BAR = BEAT * 4;   // 一小節約 1.33 秒；所有段落都以小節計，改這裡整體就一起變快或變慢
+const BPM = 225, BEAT = 60 / BPM, BAR = BEAT * 4;   // 一小節約 1.07 秒；所有段落都以小節計，改這裡整體就一起變快或變慢
 const TITLE_LEN = 15 + (TO ? 2 + Array.from(TO).length : 0);   // "Merry Christmas" 加上 ", 名字"
+const TYPE_STEP = Math.min(0.11, (2 * BAR - 0.55) / TITLE_LEN);  // 標題打字速度：一定在標題上移前打完
 const TL = {
-  typeStart: 0.35, typeStep: Math.min(0.11, 1.9 / TITLE_LEN),   // 標題打字：名字長時打快一點，才來得及在標題上移前打完
-  subIn: 0.45 + TITLE_LEN * Math.min(0.11, 1.9 / TITLE_LEN),     // 「聖誕快樂」在打完字後淡入
-  titleMove: 2 * BAR - 0.15,         // 標題縮小移到上方
+  typeStart: 0.35, typeStep: TYPE_STEP,
+  subIn: 0.45 + TITLE_LEN * TYPE_STEP,                 // 「聖誕快樂」在打完字後淡入
+  titleMove: 2 * BAR - 0.15,                           // 標題縮小移到上方
   groundStart: 2 * BAR - 0.5,
   trunkStart: 2 * BAR, trunkEnd: 2 * BAR + 1.3,
-  growStart: 2 * BAR + 0.7, growEnd: 8 * BAR,          // 樹葉由下往上長（約 4～13 秒）
+  growStart: 2 * BAR + 0.7, growEnd: 8 * BAR,          // 樹葉由下往上長（約 2.8～8.5 秒）
   garlandStart: 8 * BAR, garlandEnd: 9.75 * BAR,       // 金色彩帶
   lightsStart: 8.5 * BAR, lightsEnd: 12 * BAR,         // 彩燈沿螺旋點亮
   ornStart: 11 * BAR, ornEnd: 12.75 * BAR,             // 彩球
-  star: 13 * BAR,                                      // 頂端星星（約 21.7 秒）
+  star: 13 * BAR,                                      // 頂端星星（約 13.9 秒）
   snow: 13 * BAR,                                      // 開始下雪、燈跟著節拍閃
-  msg: 14.5 * BAR,                                     // 有祝福語時開始打字（約 24 秒）
+  msg: 14.5 * BAR,                                     // 有祝福語時開始打字（約 15.5 秒）
 };
 
 /* =====================================================================
@@ -282,7 +283,7 @@ const TREE_H = 2.15, R0 = 0.98, TIERS = 7;
 const GROUND_Y = -0.46, STAR_Y = TREE_H + 0.1;
 const CAM_D = 6.2, CAM_Y = 1.1, PITCH = 0.17;
 const COS_P = Math.cos(PITCH), SIN_P = Math.sin(PITCH);
-const ROT_SPEED = 0.425, ROT0 = 0.5;     // 每秒轉幾弧度（轉一圈約 15 秒）
+const ROT_SPEED = 0.53, ROT0 = 0.5;      // 每秒轉幾弧度（轉一圈約 12 秒）
 const TARGET_COLS = 64;              // 樹的寬度大約佔幾個字元
 const N_LEAF = 12500, N_UNDER = 1200, N_TRUNK = 700, N_GROUND = 1600;
 const N_GARL = 1700, N_LIGHTS = 110, N_ORN = 30;
@@ -1146,7 +1147,7 @@ function render(t, idle, tt) {
 }
 
 /* ---- 祝福語：星星亮起後在樹下一行一行打出來，最後淡入署名 ---- */
-const MSG_CPS = 0.1, MSG_GAP = 0.5;       // 每個字 0.1 秒，每行之間停 0.5 秒
+const MSG_CPS = 0.08, MSG_GAP = 0.4;      // 每個字 0.08 秒，每行之間停 0.4 秒
 function drawMessage(t) {
   if (!HAS_MSG || t < TL.msg) return;
   const areaB = gridH - (CARD_ENABLED ? 110 : 50);   // 底部留給音樂提示與「也做一張」按鈕

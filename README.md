@@ -65,17 +65,17 @@ Names and messages in other languages turn into long `%E5%B0%8F…` codes inside
 
 ## Timeline
 
-The music runs at 180 BPM, so one bar is about 1.33 seconds; every stage starts on a bar line. Change `BPM` and the whole thing, music included, speeds up or slows down together.
+The music runs at 225 BPM, so one bar is about 1.07 seconds; every stage starts on a bar line. Change `BPM` and the whole thing, music included, speeds up or slows down together.
 
 | Time | What happens |
 | --- | --- |
-| 0–2.5 s | Starry sky; `Merry Christmas` types itself and 聖誕快樂 fades in |
-| 2.5–11 s | Ground and trunk appear, then the needles grow from the bottom up |
-| 11–17 s | A gold garland spirals up, 110 lights switch on one by one, then the ornaments appear |
-| ~17.3 s | The star lights up with a flash and a burst of sparks |
-| After that | Snow falls; the lights flash on the beat and change pattern every 4 bars. A personal message, if any, is typed out at about 19 s |
+| 0–2 s | Starry sky; `Merry Christmas` types itself and 聖誕快樂 fades in |
+| 2–8.5 s | Ground and trunk appear, then the needles grow from the bottom up |
+| 8.5–14 s | A gold garland spirals up, 110 lights switch on one by one, then the ornaments appear |
+| ~13.9 s | The star lights up with a flash and a burst of sparks |
+| After that | Snow falls; the lights flash on the beat and change pattern every 4 bars. A personal message, if any, is typed out at about 15.5 s |
 
-The song plays an intro, chorus, verse and a glockenspiel chorus an octave up, about 67 seconds in total, then loops.
+The song plays an intro, chorus, verse and a glockenspiel chorus an octave up, about 53 seconds in total, then loops.
 
 ## Controls
 
