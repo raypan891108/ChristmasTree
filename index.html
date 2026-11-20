@@ -74,7 +74,7 @@
   }
   .sheet {
     position: relative; width: 100%; max-width: 420px; max-height: 100%; overflow: auto;
-    display: grid; gap: 8px; padding: 22px 20px 20px; border-radius: 16px;
+    display: grid; grid-auto-rows: max-content; gap: 8px; padding: 22px 20px 20px; border-radius: 16px;   /* 內容太高時整張捲動，不要把欄位壓扁 */
     background: #0c1226; border: 1px solid rgba(255, 217, 138, .22); box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
     font: 400 14px/1.5 var(--cjk); color: var(--ink); -webkit-user-select: text; user-select: text;
   }
@@ -85,6 +85,8 @@
   .sheet input, .sheet textarea {
     width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(200, 215, 255, .2);
     background: #070b1a; color: var(--ink); font: 400 16px/1.4 var(--cjk); resize: vertical;
+  }
+  .sheet textarea { min-height: calc(3 * 1.4em + 22px); line-height: 1.4;     /* 祝福語固定看得到 3 行 */
   }
   .sheet input:focus, .sheet textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: transparent; }
   .sheet #f-link { font: 400 13px/1.4 var(--mono); color: var(--dim); }
@@ -256,10 +258,11 @@ const TXT = ZH ? {
 /* =====================================================================
  * 節奏與時間軸（以小節為單位，讓畫面跟音樂對齊）
  * ===================================================================== */
-const BPM = 144, BEAT = 60 / BPM, BAR = BEAT * 4;   // 一小節約 1.67 秒
+const BPM = 180, BEAT = 60 / BPM, BAR = BEAT * 4;   // 一小節約 1.33 秒；所有段落都以小節計，改這裡整體就一起變快或變慢
+const TITLE_LEN = 15 + (TO ? 2 + Array.from(TO).length : 0);   // "Merry Christmas" 加上 ", 名字"
 const TL = {
-  typeStart: 0.35, typeStep: 0.11,   // "Merry Christmas" 打字
-  subIn: 2.1,                        // 「聖誕快樂」淡入
+  typeStart: 0.35, typeStep: Math.min(0.11, 1.9 / TITLE_LEN),   // 標題打字：名字長時打快一點，才來得及在標題上移前打完
+  subIn: 0.45 + TITLE_LEN * Math.min(0.11, 1.9 / TITLE_LEN),     // 「聖誕快樂」在打完字後淡入
   titleMove: 2 * BAR - 0.15,         // 標題縮小移到上方
   groundStart: 2 * BAR - 0.5,
   trunkStart: 2 * BAR, trunkEnd: 2 * BAR + 1.3,
@@ -279,7 +282,7 @@ const TREE_H = 2.15, R0 = 0.98, TIERS = 7;
 const GROUND_Y = -0.46, STAR_Y = TREE_H + 0.1;
 const CAM_D = 6.2, CAM_Y = 1.1, PITCH = 0.17;
 const COS_P = Math.cos(PITCH), SIN_P = Math.sin(PITCH);
-const ROT_SPEED = 0.34, ROT0 = 0.5;
+const ROT_SPEED = 0.425, ROT0 = 0.5;     // 每秒轉幾弧度（轉一圈約 15 秒）
 const TARGET_COLS = 64;              // 樹的寬度大約佔幾個字元
 const N_LEAF = 12500, N_UNDER = 1200, N_TRUNK = 700, N_GROUND = 1600;
 const N_GARL = 1700, N_LIGHTS = 110, N_ORN = 30;
@@ -1143,7 +1146,7 @@ function render(t, idle, tt) {
 }
 
 /* ---- 祝福語：星星亮起後在樹下一行一行打出來，最後淡入署名 ---- */
-const MSG_CPS = 0.12, MSG_GAP = 0.6;      // 每個字 0.12 秒，每行之間停 0.6 秒
+const MSG_CPS = 0.1, MSG_GAP = 0.5;       // 每個字 0.1 秒，每行之間停 0.5 秒
 function drawMessage(t) {
   if (!HAS_MSG || t < TL.msg) return;
   const areaB = gridH - (CARD_ENABLED ? 110 : 50);   // 底部留給音樂提示與「也做一張」按鈕
