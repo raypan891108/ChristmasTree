@@ -35,6 +35,8 @@ https://raypan891108.github.io/ChristmasTree/?to=小美&msg=祝你聖誕快樂|�
 
 這些文字只會畫在畫布上，不會被當成 HTML 放進網頁。
 
+中文放進網址會變成一長串 `%E5%B0%8F…` 編碼，看起來怪怪的，所以表單也會產生一張 **QR 小卡**：圖片上有標題、QR Code 和署名，朋友用手機相機一掃就能打開。可以下載圖片，在支援的手機上直接分享到 LINE 等 App，或在手機上長按圖片儲存。QR Code 產生器（[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 1.4.4，MIT）只在打開表單時從 cdnjs 載入，並用雜湊值確認檔案沒被竄改；動畫本身仍然不需要任何外部檔案。
+
 <p align="center">
   <img src="screenshots/personal-card.png" width="300" alt="專屬卡片：樹上方是 Merry Christmas, Amy，樹下是兩行祝福語與署名 — Ray">
 </p>

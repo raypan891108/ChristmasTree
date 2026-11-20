@@ -96,6 +96,10 @@
   .sheet .row button[type="submit"] { background: var(--gold); color: #0b1020; border-color: var(--gold); }
   .sheet .row button:focus-visible, .sheet .x:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .sheet .note { min-height: 1.5em; margin: 0; font-size: 12.5px; color: var(--gold); }
+  /* QR 小卡：網址帶中文會變成一長串編碼，掃 QR Code 比較好傳 */
+  .sheet .qr { display: grid; justify-items: center; gap: 6px; margin-top: 8px; }
+  .sheet .qr img { width: min(220px, 64%); height: auto; border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
+  .sheet .qr p { margin: 0; font-size: 12.5px; color: var(--dim); text-align: center; }
   .sheet .x {
     position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
     border: 0; background: transparent; color: var(--dim); font: 400 22px/1 var(--mono);
@@ -166,8 +170,14 @@
     <input id="f-from" name="from" maxlength="20" placeholder="e.g. Ray">
     <label for="f-link" id="t-link">Your link</label>
     <input id="f-link" readonly>
+    <div class="qr">
+      <img id="f-qr" alt="QR code card for this link" width="600" height="760">
+      <p id="t-qr-hint">On a phone, press and hold the image to save it</p>
+    </div>
     <div class="row">
       <button type="button" id="f-copy">Copy link</button>
+      <button type="button" id="f-qrdl">Download QR card</button>
+      <button type="button" id="f-share" hidden>Share image</button>
       <button type="submit" id="f-open">Preview</button>
     </div>
     <p class="note" id="f-note" role="status"></p>
@@ -226,6 +236,8 @@ const TXT = ZH ? {
   to: '收件人', msg: '祝福語', msgHint: '（最多 3 行，每行 60 字）', from: '署名', link: '專屬連結',
   toPh: '例如：小美', msgPh: '祝你聖誕快樂\n新的一年也要開心', fromPh: '例如：Ray',
   copy: '複製連結', open: '預覽', close: '關閉', copied: '已複製連結', selected: '已選取連結，請按複製',
+  qrDl: '下載 QR 小卡', qrShare: '分享圖片', qrHint: '手機上可以長按圖片儲存', qrScan: '用手機相機掃描，打開這棵聖誕樹',
+  qrAlt: '這個連結的 QR Code 小卡', qrOffline: '需要連上網路才能產生 QR Code', qrSaved: '已下載 QR 小卡',
   noRec: '這個瀏覽器不支援錄影，請改用螢幕錄影。',
 } : {
   lang: 'en', canvas: 'Animated 3D ASCII Christmas tree', tap: '♪ Tap anywhere for music', cta: '🎄 Make your own card',
@@ -235,6 +247,9 @@ const TXT = ZH ? {
   to: 'To', msg: 'Message', msgHint: '(up to 3 lines, 60 characters each)', from: 'From', link: 'Your link',
   toPh: 'e.g. Amy', msgPh: 'Merry Christmas!\nWishing you a joyful new year', fromPh: 'e.g. Ray',
   copy: 'Copy link', open: 'Preview', close: 'Close', copied: 'Link copied', selected: 'Link selected — copy it manually',
+  qrDl: 'Download QR card', qrShare: 'Share image', qrHint: 'On a phone, press and hold the image to save it',
+  qrScan: 'Scan with your phone camera to open the tree', qrAlt: 'QR code card for this link',
+  qrOffline: 'The QR code needs an internet connection', qrSaved: 'QR card downloaded',
   noRec: 'This browser can’t record video. Please use your device’s screen recording instead.',
 };
 
@@ -1308,7 +1323,9 @@ function applyText() {
     $(id).setAttribute('aria-label', label); $(id).title = title;
   }
   for (const [id, key] of [['t-h', 'h'], ['t-h2', 'h2'], ['t-to', 'to'], ['t-msg', 'msg'], ['t-msg-hint', 'msgHint'],
-    ['t-from', 'from'], ['t-link', 'link'], ['f-copy', 'copy'], ['f-open', 'open']]) $(id).textContent = TXT[key];
+    ['t-from', 'from'], ['t-link', 'link'], ['f-copy', 'copy'], ['f-open', 'open'], ['f-qrdl', 'qrDl'],
+    ['f-share', 'qrShare'], ['t-qr-hint', 'qrHint']]) $(id).textContent = TXT[key];
+  $('f-qr').alt = TXT.qrAlt;
   $('f-close').setAttribute('aria-label', TXT.close);
   fTo.placeholder = TXT.toPh; fMsg.placeholder = TXT.msgPh; fFrom.placeholder = TXT.fromPh;
 }
@@ -1350,13 +1367,14 @@ function openCard() {
   fTo.value = TO; fMsg.value = MSG.join('\n'); fFrom.value = FROM;
   fLink.value = cardLink(); fNote.textContent = '';
   cardEl.hidden = false;
+  renderQr();
   fTo.focus();
 }
 function closeCard() { cardEl.hidden = true; cardBtn.focus(); }
 cardBtn.addEventListener('click', openCard);
 document.getElementById('f-close').addEventListener('click', closeCard);
 cardEl.addEventListener('click', e => { if (e.target === cardEl) closeCard(); });   // 點旁邊的暗處關閉
-cardForm.addEventListener('input', () => { fLink.value = cardLink(); fNote.textContent = ''; });
+cardForm.addEventListener('input', () => { fLink.value = cardLink(); fNote.textContent = ''; refreshQr(); });
 document.getElementById('f-copy').addEventListener('click', () => {
   const link = cardLink();
   fLink.value = link;
@@ -1366,6 +1384,106 @@ document.getElementById('f-copy').addEventListener('click', () => {
   } catch (err) { fallback(); }
 });
 cardForm.addEventListener('submit', e => { e.preventDefault(); location.href = cardLink(); });
+
+/* ---- QR 小卡：把專屬連結做成一張可以直接傳給朋友掃的圖片 ----
+ * QR Code 產生器（qrcode-generator 1.4.4，MIT）只在第一次打開表單時從 cdnjs 載入，
+ * 並用 SRI 雜湊確認檔案沒被竄改；動畫本身仍然不需要任何外部檔案 */
+const QR_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+const QR_SRI = 'sha512-ZDSPMa/JM1D+7kdg2x3BsruQ6T/JpJo3jWDWkCZsP+5yVyp1KfESqLI+7RqB5k24F7p2cV7i2YHh/890y6P6Sw==';
+const fQr = document.getElementById('f-qr'), qrDlBtn = document.getElementById('f-qrdl'), shareBtn = document.getElementById('f-share');
+const qrCanvas = document.createElement('canvas');
+qrCanvas.width = 600; qrCanvas.height = 760;
+let qrLoading = null, qrTimer = 0, qrFile = null;
+
+function loadQr() {
+  if (typeof window.qrcode === 'function') return Promise.resolve(window.qrcode);
+  if (!qrLoading) {
+    qrLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = QR_SRC; s.integrity = QR_SRI; s.crossOrigin = 'anonymous'; s.referrerPolicy = 'no-referrer';
+      s.onload = () => (typeof window.qrcode === 'function' ? resolve(window.qrcode) : reject(new Error('qrcode missing')));
+      s.onerror = () => reject(new Error('qrcode load failed'));
+      document.head.appendChild(s);
+    });
+    qrLoading.catch(() => { qrLoading = null; });     // 失敗（例如離線）就下次再試
+  }
+  return qrLoading;
+}
+function makeQr(qrcode, text) {
+  for (const level of ['M', 'L']) {                  // 字太多放不下時，改用容錯較低、容量較大的等級
+    try { const q = qrcode(0, level); q.addData(text, 'Byte'); q.make(); return q; } catch (e) { /* 試下一級 */ }
+  }
+  return null;
+}
+function refreshQr() { clearTimeout(qrTimer); qrTimer = setTimeout(renderQr, 150); }
+function renderQr() {
+  const link = cardLink(), to = clip(fTo.value, 20), from = clip(fFrom.value, 20);
+  loadQr().then(qrcode => makeQr(qrcode, link), () => { fNote.textContent = TXT.qrOffline; return null; })
+    .then(q => {
+      drawQrCard(q, to, from);
+      fQr.src = qrCanvas.toDataURL('image/png');     // 用 <img> 顯示，手機才能長按儲存
+      qrDlBtn.disabled = !q;
+      qrFile = null;
+      if (q) qrCanvas.toBlob(b => { if (b) qrFile = new File([b], 'christmas-card-qr.png', { type: 'image/png' }); updateShare(); }, 'image/png');
+      else updateShare();
+    });
+}
+function drawQrCard(q, to, from) {
+  const g = qrCanvas.getContext('2d'), CW = qrCanvas.width, CH = qrCanvas.height;
+  const bg = g.createLinearGradient(0, 0, 0, CH);
+  bg.addColorStop(0, '#0d1638'); bg.addColorStop(1, '#05070f');
+  g.fillStyle = bg; g.fillRect(0, 0, CW, CH);
+  const r = mulberry32(1225);                        // 固定位置的小星星
+  for (let i = 0; i < 70; i++) {
+    const x = r() * CW, y = r() * CH, s = r() < 0.15 ? 3 : 2;
+    if (x > 80 && x < CW - 80 && y > 140 && y < 580) continue;
+    g.fillStyle = `rgba(207,217,255,${(0.25 + r() * 0.5).toFixed(2)})`; g.fillRect(x, y, s, s);
+  }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const title = to ? `Merry Christmas, ${to}` : 'Merry Christmas';
+  let size = 40;
+  g.font = `700 ${size}px ${MONO}`;
+  const tw = g.measureText(title).width;
+  if (tw > CW - 60) { size = Math.max(18, size * (CW - 60) / tw); g.font = `700 ${size.toFixed(1)}px ${MONO}`; }
+  g.save(); g.shadowColor = 'rgba(255,190,90,0.55)'; g.shadowBlur = 16; g.fillStyle = '#ffd98a'; g.fillText(title, CW / 2, 66); g.restore();
+  g.font = `500 22px ${CJK}`; g.fillStyle = '#ff8593'; g.fillText(SUB, CW / 2, 112);
+  const box = 400, bx = (CW - box) / 2, by = 156;
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  if (g.roundRect) g.roundRect(bx, by, box, box, 22); else g.rect(bx, by, box, box);
+  g.fill();
+  if (q) {
+    const n = q.getModuleCount(), cell = Math.max(1, Math.floor(box / (n + 8)));   // 四周留 4 格空白，相機比較好掃
+    const ox = bx + (box - cell * n) / 2, oy = by + (box - cell * n) / 2;
+    g.fillStyle = '#0b1020';
+    for (let row = 0; row < n; row++) for (let col = 0; col < n; col++) if (q.isDark(row, col)) g.fillRect(ox + col * cell, oy + row * cell, cell, cell);
+  } else {
+    g.font = `500 20px ${CJK}`; g.fillStyle = '#0b1020'; g.fillText(TXT.qrOffline, CW / 2, by + box / 2, box - 40);
+  }
+  g.font = `500 21px ${CJK}`; g.fillStyle = '#e8eefc'; g.fillText(TXT.qrScan, CW / 2, 604, CW - 60);
+  if (from) { g.font = `500 22px ${CJK}`; g.fillStyle = '#ffd98a'; g.fillText(`— ${from}`, CW / 2, 652, CW - 60); }
+  const site = (location.host + location.pathname).replace(/index\.html$/, '').replace(/\/$/, '');
+  if (location.host) { g.font = `400 15px ${MONO}`; g.fillStyle = '#7f8db5'; g.fillText(site, CW / 2, 724, CW - 40); }
+}
+function updateShare() {
+  // 手機上可以直接把圖片分享到 LINE 等 App；不支援的瀏覽器就不顯示這顆按鈕
+  try { shareBtn.hidden = !(qrFile && navigator.canShare && navigator.canShare({ files: [qrFile] })); }
+  catch (e) { shareBtn.hidden = true; }
+}
+qrDlBtn.addEventListener('click', () => {
+  qrCanvas.toBlob(b => {
+    if (!b) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = 'christmas-card-qr.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    fNote.textContent = TXT.qrSaved;
+  }, 'image/png');
+});
+shareBtn.addEventListener('click', () => {
+  if (!qrFile) return;
+  navigator.share({ files: [qrFile], title: document.title }).catch(() => { /* 使用者取消分享 */ });
+});
 // 切到背景時暫停時鐘，回來後從原地繼續，畫面與音樂仍然同步
 document.addEventListener('visibilitychange', () => {
   if (mode !== 'run' || rec) return;

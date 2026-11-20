@@ -35,6 +35,8 @@ https://raypan891108.github.io/ChristmasTree/?to=Amy&msg=Merry%20Christmas!%7CWi
 
 The text is only ever drawn onto the canvas, never inserted into the page as HTML.
 
+Names and messages in other languages turn into long `%E5%B0%8F…` codes inside a URL, so the form also makes a **QR card**: an image with the title, a QR code and your signature that your friend can scan with a phone camera. Download it, share it straight to a chat app (on phones that support sharing images), or press and hold it on a phone to save it. The QR generator ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 1.4.4, MIT) is loaded from cdnjs, with an integrity hash, only when you open the form; the animation itself still needs no outside files.
+
 <p align="center">
   <img src="screenshots/personal-card.png" width="300" alt="A personal card: “Merry Christmas, Amy” above the tree and a two-line message signed “— Ray” below it">
 </p>
